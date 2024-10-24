@@ -1,0 +1,15 @@
+TFAdd	tfvc.txt	/*TFAdd*
+TFCheckout	tfvc.txt	/*TFCheckout*
+TFDiff	tfvc.txt	/*TFDiff*
+TFHistory	tfvc.txt	/*TFHistory*
+TFLoadDiffs	tfvc.txt	/*TFLoadDiffs*
+TFLoadStatus	tfvc.txt	/*TFLoadStatus*
+TFStatus	tfvc.txt	/*TFStatus*
+TFUndo	tfvc.txt	/*TFUndo*
+tfvc.commands	tfvc.txt	/*tfvc.commands*
+tfvc.create_default_mappings	tfvc.txt	/*tfvc.create_default_mappings*
+tfvc.faq	tfvc.txt	/*tfvc.faq*
+tfvc.nvim	tfvc.txt	/*tfvc.nvim*
+tfvc.setup()	tfvc.txt	/*tfvc.setup()*
+tfvc.tf_path	tfvc.txt	/*tfvc.tf_path*
+tfvc.version_spec	tfvc.txt	/*tfvc.version_spec*

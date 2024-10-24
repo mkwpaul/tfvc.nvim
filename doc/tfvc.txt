@@ -1,0 +1,192 @@
+================================================================================
+INTRODUCTION                                                        *tfvc.nvim*
+
+tfvc.nvim is an unofficial plugin for integration of team foundation verion
+control (tfvc), referred to as tfvc from here on.
+
+It provides commands to check-out files from tfvc, undo current changes, add
+files, show status, diff pending changes, open history etc.
+
+It also provides default keybinds for those commands (if enabled).
+Tested on Windows 10/11 and TF Version 17.10.34824.3
+This Project is unaffiliated with Microsoft.
+
+See |tfvc.commands| for a full list of commands.
+
+GETTING STARTED                                                  *tfvc.setup()*
+
+To setup tfvc.nvim run `require('tfvc').setup()`
+tfvc.nvim is dependend on the TF cli. So it needs to be able to invoke it.
+
+Ideally the TF.exe its already in your PATH so you can also use it outside of
+nvim. If that's not an options you can set `tf_path` during setup to specify
+the absolute path to the TF.exe.
+
+As of writing the TF.exe can be found here:
+
+`C:/Program Files/Microsoft Visual Studio/2022/Professional/Common7/IDE/CommonExtensions/Microsoft/TeamFoundation/Team Explorer/TF.exe`
+, assuming your Visual Studio installation is in its default location.
+
+"Advanced" config:
+  >
+  require('tfvc').setup({
+  {
+    -- specify the absolute path to the TF.exe
+    tf_path = 'C:/Program Files/Microsoft Visual Studio/2022/Professional/Common7/IDE/CommonExtensions/Microsoft/TeamFoundation/Team Explorer/TF.exe',
+    -- change the default leader for the default keymappings
+    tf_leader = '<leader>g',
+    create_default_mappings = true,
+    -- sets the base url for the web interface of your tfs repository
+    version_control_web_url = 'http://zesrvtfs:8080/tfs/DefaultCollection/project/_versionControl',
+    -- required so that the TFHistory command can map local paths to server paths
+    workfold = {
+      collection = "http://zesrvtfs:8080/tfs/defaultcollection",
+      localPath = "C:/Dev/",
+      serverPath = "$/project",
+      workspace = "default-workspace"
+    }
+  })
+<
+`version_control_web_url` and `workfold` are required for the
+|TFHistory| command.
+
+You can obtain the info about your workfold by running `tf workfold` in your
+shell.
+
+SETUP OPTIONS
+                                                 *tfvc.create_default_mappings*
+`create_default_mappings`
+if set to true, the default keymappings will be created.
+default is false
+
+`version_control_web_url`
+see |TFHistory|
+
+`workfold `
+                                                                 *tfvc.tf_path*
+`tf_path`
+Full path to the TF executable. If not set, the it will be assumed that the tf
+executable is in the PATH tf_leader string 
+
+`tf_leader`
+Changes leader for default keymappings. default value: '<leader>t'. Only
+applies if create_default_mappings is enabled
+
+COMMANDS                                                        *tfvc.commands*
+
+  |TFAdd|
+  |TFCheckout|
+  |TFDiff|
+  |TFHistory|
+  |TFLoadDiffs|
+  |TFLoadStatus|
+  |TFStatus|
+  |TFUndo|
+
+:TFAdd                                                                  *TFAdd*
+- Default keybind: `<leader>ta`
+- Adds the current file to TFS. 
+- Non-blocking equivalent to `:!tf add "%"
+
+:TFCheckout                                                        *TFCheckout*
+- Default keybind: `<leader>tc`
+- Check out the current file from TFS.
+- Non-blocking equivalent to `:!tf checkout "%"` 
+
+:TFDiff {version spec?}                                                *TFDiff*
+
+- Default keybind: `<leader>tl` (diff with latest)
+- Default keybind: `<leader>td` (prompt for specific version_spec) 
+Diffs the local version of the current file with a specific server version.
+Takes the |tfvc.version_spec| as an argument.
+The version_spec is passed directly to the `tf view command.
+
+To diff with the latest server version, run `:TFDiff T` or just `:TFDiff`. To
+diff with version of a specific changeset i.e CS12345 run `:TFDiff C12345`. To
+diff with a version from a specific Date e.g.: January 1st 2020, run 
+`:TFDiff D2020-01-01`. Any Date-format supported by .NET will work.
+
+Tipp:
+To quickly review your pending changes bevor commiting, you can use |TFDiff|,
+|TFStatus| and |TFLoadDiffs| if you've got a slow server, in combination with
+the quickfix list, the `:cnext` and `cprev` commands and |CTRL-W_o| to
+
+First, run `:TFLoadDiffsDiff` to preload all server files.
+Then open the changed files in telescope with `:TFStatus` and press `<C-q>` to
+put the files into the quickfix list.
+
+Then you can use `:cnext` followed by |CTRL-W_o| and |TFDiff| to view and diff
+the next file.
+
+:TFHistory                                                          *TFHistory*
+
+- Default keybind: `<leader>tw`
+Opens the history of the current file in a browser.
+Requires the `version_control_web_url` to be set during |tfvc.setup|
+The |tfvc.workfold| should also be setup to avoid unnecessary queries.
+
+:TFLoadStatus                                                    *TFLoadStatus*
+
+- Default keybind: `<leader>tps` -- [T]FVC [P]reload [S]tatus]
+- Preloads the status (pending changes) without showing them.
+Use |TFStatus| to show them afterwards.
+
+:TFLoadDiffs [version spec]                                       *TFLoadDiffs*
+- Default keybind: `<leader>tpd` -- [T]FVC [P]reload [D]iffs
+- Preloads a specific server version of all files with pending changes.
+
+:TFStatus {all/in_cwd,fresh/cached}                                  *TFStatus*
+
+- Default keybind: `<leader>tss` -- [T]FVC [S]tatus 
+- Default keybind: `<leader>tsf` -- [T]FVC [S]tatus [F]resh
+Wrapper around the `!tf status` command
+Shows the pending changes in a telescope picker.
+
+Optional flags: `all`, `cached`, `fresh`, `in_cwd` or their initials
+- `in_cwd`: only show changed files under the current working directory.
+- `all`: opposite of `in_cwd` 
+- `cached` load pending changes from cache if availible, otherwise query fresh
+- `fresh` ignore cache for pending changes and query from TF.exe
+
+Default |TFStatus| is equivalent to `:TFStatus in_cwd, cached`
+
+:TFUndo                                                                *TFUndo*
+- Default keybind: `<leader>tu`
+- Undoes any pending changes in the current file.
+- Non-blocking equivalent to `:!tf undo "%"`
+
+
+VERSIONSPEC
+                                                            *tfvc.version_spec*
+The complete version_spec format is as follows:
+   >
+  (taken from the TF.exe help)
+  Versionspec:                                                
+    Date/Time         D"any .NET Framework-supported format"
+                      or any of the date formats of the local machine
+    Changeset number  Cnnnnnn
+    Label             Llabelname
+    Latest version    T
+    Workspace         Wworkspacename;workspaceowner
+
+The server file is downloaded via the following command:
+`!tf view /version:[version spec] /output:[temp file] [current file]
+where [version spec] is the version of the file to download to a temporary
+file.
+
+FAQ                                                                  *tfvc.faq*
+
+- `How do I check in changes`?
+Run `tf checkin` outside of nvim.
+It will open a gui-tool.
+
+- `How to I get the latest changes from the tfvc server?`
+Run `tf get . /recursive /noprompt` outside of nvim.
+if you have conflicts you can run `tf resolve /noprompt /auto:[strat]
+to resolve them.
+
+- `How do I use nvim as a merge tool?`
+You tell me! I wanna know too.
+
+
+
