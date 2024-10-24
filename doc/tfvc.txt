@@ -178,7 +178,9 @@ FAQ                                                                  *tfvc.faq*
 
 - `How do I check in changes`?
 Run `tf checkin` outside of nvim.
-It will open a gui-tool.
+It will open a gui-tool. It has usable keyboard navigation and you need to use
+it if you want to associate a specfic work item with your changeset as you
+check in.
 
 - `How to I get the latest changes from the tfvc server?`
 Run `tf get . /recursive /noprompt` outside of nvim.
@@ -186,7 +188,5 @@ if you have conflicts you can run `tf resolve /noprompt /auto:[strat]
 to resolve them.
 
 - `How do I use nvim as a merge tool?`
-You tell me! I wanna know too.
-
-
+I don't know. You tell me, when you figure it out.
 

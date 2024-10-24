@@ -6,7 +6,7 @@ local state = require('tfvc.state')
 --- parses the output of the tf history command
 --- unnecessary since we can just open the web interface and don't have to
 --- implement anything ourselves
---- the cli tool is also slow af so its much faster to just open the web-ui
+--- if your server is slow its also much faster to open the web client than to issue commands via the cli tool
 ---@return table<historyChange>
 local function parse_history(log)
 
