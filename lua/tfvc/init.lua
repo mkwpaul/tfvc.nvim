@@ -13,7 +13,7 @@ function M.cmd_tf_checkout()
   end
   local cmd =  {  'vc', 'checkout', path, }
   u.tf_cmd(cmd, function(obj)
-    if (obj.code == 0) then
+    if obj.code == 0 then
       vim.schedule(function() vim.cmd 'set noreadonly' end)
     end
   end)
@@ -58,8 +58,11 @@ function M.tf_compare(versionspec, buf_id, force_fresh)
   M.tf_get_version_from_versionspec(path, versionspec, force_fresh, function(temp)
     -- we need to disable buf mode for other buffers
     -- otherwise we end up diffing with all those files too
-    vim.cmd('bufdo diffoff!')
+    --
+    -- TODO:
     -- bufdo navigates us to the last buffer, so we need to navigate back to the buffer we had
+    -- do this without bufdo so we don't totally screw up the jump list and manually navigate back
+    vim.cmd('bufdo diffoff!')
     vim.api.nvim_set_current_buf(buf_id)
     vim.cmd.diffsplit(temp)
   end)
@@ -193,10 +196,10 @@ M.commands = {
 }
 
 M.keymaps = {
-  { run = ':TFStatus cached in_cwd<CR>', desc = 'TFS: Status', default_mapping = 'ss' },
-  { run = ':TFStatus fresh in_cwd<CR>', desc = 'TFS: Status', default_mapping = 'sf' },
-  { desc = 'TFS: Diff with specific Version', default_mapping = 'd', run = function()
-        M.tf_compare(M.get_versionspec_from_user())
+  { default_mapping = 'ss', desc = 'TFS: Status', run = '<cmd>TFStatus cached in_cwd<CR>' },
+  { default_mapping = 'sf', desc = 'TFS: Status', run = '<cmd>TFStatus fresh in_cwd<CR>' },
+  { default_mapping = 'd', desc = 'TFS: Diff with specific Version', run = function()
+    M.tf_compare(M.get_versionspec_from_user())
   end},
 }
 
@@ -266,7 +269,7 @@ function M.setup(opts)
       vim.g.version_control_web_url = opts.version_control_web_url
   end
   if opts.workfold then
-      vim.g.workfold = opts.workfold
+      vim.g.tfvc_workfold = opts.workfold
   end
   if opts.tf_path then
       vim.g.tf_path = opts.tf_path

@@ -172,6 +172,35 @@ function M.show_telescope_finder(fresh, in_cwd, opts)
   end)
 end
 
+function M.load_pending_changes_into_qf(fresh, in_cwd)
+  M.do_with_pending_changes(fresh, function (pending_changes)
+
+    vim.schedule(function()
+      if in_cwd then
+        pending_changes = vim.tbl_filter(function(change) return u.is_within_workspace(change.Local) end, pending_changes)
+      end
+      local qf_entries = vim.tbl_map(function (change)
+        return {
+          filename = change.Local,
+          valid = true,
+          text = change.name,
+        }
+      end, pending_changes)
+
+      vim.fn.setqflist(qf_entries)
+      vim.cmd.copen()
+
+      --[[
+      vim.diagnostic.setqflist({
+        items = qf_entries,
+        title = "tfvc: pending changes",
+        open = true,
+      })
+      ]]
+    end)
+  end)
+end
+
 ---@param opts cmd_call_args
 function M.cmd_show_telescope_finder(opts)
   local args = opts.fargs or {}

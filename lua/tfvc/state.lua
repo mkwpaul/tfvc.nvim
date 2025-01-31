@@ -3,7 +3,7 @@ local u = require('tfvc.utils')
 ---@class pendingChange
 ---@field name string
 ---@field Change string Types of Change. One or more of "Edit, Add, Delete, Encoding" separated by spaces
----@field Local string local path, normalized via vim.fs.normalize
+---@field Local string full local path, normalized via vim.fs.normalize
 ---@field Relative string local path relative to cwd, normalized via vim.fs.normalize
 ---@field item string server path
 ---@field type string Type of Item. "File" or "Directory"
@@ -60,6 +60,7 @@ Workspace : localMachine (tfs user)
 Collection: [url to server]
  [TfsServerPath]: [MappedLocalPath]
 --]]
+---@param output string
 ---@return workfold | nil
 local function parse_tf_workfold(output)
   local workfold = {}
@@ -91,9 +92,10 @@ local function parse_tf_workfold(output)
   return workfold
 end
 
+---@return workfold?
 function M.get_workfold_or_get_cached()
-  if vim.g.workfold then
-    return vim.g.workfold
+  if vim.g.tfvc_workfold then
+    return vim.g.tfvc_workfold
   end
   u.tf_cmd({ 'workfold' }, function(obj)
     if obj.code ~= 0 then
@@ -111,8 +113,10 @@ function M.get_workfold_or_get_cached()
       return
     end
 
-    vim.g.workfold = workfold
+    vim.g.tfvc_workfold = workfold
   end)
+
+  return nil
 end
 
 return M

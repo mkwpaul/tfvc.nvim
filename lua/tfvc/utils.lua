@@ -1,6 +1,7 @@
 local M = {}
 
 --- returns a generator that yields lines from a string
+---@param str string
 function M.line_iter(str)
   local lines = vim.split(str, '\n')
   local i = 0
@@ -43,7 +44,11 @@ end
 ---@param full_path string 
 ---@return boolean
 function M.is_within_workspace(full_path)
-  local cwd = vim.fs.normalize(vim.fn.getcwd(0))
+  -- paths on windows are case insensitive by default
+  -- i think you can optionally make them case sensitive, but lets not worry about that :^)
+  -- I also doubt anyone will use this on a linux system where paths are case sensitive
+  full_path = full_path:lower()
+  local cwd = vim.fs.normalize(vim.fn.getcwd(0):lower())
   return vim.startswith(full_path, cwd)
 end
 
@@ -58,7 +63,7 @@ function M.tf_cmd(space_separated, exit_callback)
   print('cmd:' .. command_string)
 
   local _ = vim.system(space_separated, nil, function(obj)
-    if (obj.code ~= 0) then
+    if obj.code ~= 0 then
       vim.schedule(function ()
         local log = command_string .. '\n' .. 'Code:  ' .. obj.code .. '\n' .. obj.stderr .. obj.stdout
         vim.notify(log, vim.log.levels.ERROR)
@@ -97,11 +102,11 @@ function M.get_current_file(command, bufId)
   return path
 end
 
-local char_to_hex = function(c)
+local function char_to_hex(c)
   return string.format("%%%02X", string.byte(c))
 end
 
-local hex_to_char = function(x)
+local function hex_to_char(x)
   return string.char(tonumber(x, 16))
 end
 
