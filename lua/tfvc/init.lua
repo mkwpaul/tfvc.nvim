@@ -56,15 +56,20 @@ function M.tf_compare(versionspec, buf_id, force_fresh)
   versionspec = versionspec or vim.g.default_versionspec
 
   M.tf_get_version_from_versionspec(path, versionspec, force_fresh, function(temp)
+
     -- we need to disable buf mode for other buffers
     -- otherwise we end up diffing with all those files too
-    --
-    -- TODO:
-    -- bufdo navigates us to the last buffer, so we need to navigate back to the buffer we had
-    -- do this without bufdo so we don't totally screw up the jump list and manually navigate back
-    vim.cmd('bufdo diffoff!')
-    vim.api.nvim_set_current_buf(buf_id)
+    -- vim.cmd('bufdo diffoff!')
+    local buffers = vim.api.nvim_list_bufs()
+    for _, current_buf_id in pairs(buffers) do
+      if vim.api.nvim_buf_is_loaded(current_buf_id) then
+        vim.api.nvim_buf_set_option(current_buf_id, "diff", false)
+        --vim.api.nvim_set_option_value("diffthis", false, { buf = current_buf_id } )
+      end
+    end
+
     vim.cmd.diffsplit(temp)
+    -- vim.api.nvim_set_current_buf(buf_id)
   end)
 end
 
@@ -186,7 +191,7 @@ M.commands = {
   ['TFCheckout'] = { run = M.cmd_tf_checkout, desc = "TFS: Checkout file", default_mapping = 'c' },
   ['TFDiff'] = { run = cmd_tf_diff, desc = 'TFS: Compare local file to Server Version', default_mapping = 'l', nargs = '?', bang = true },
   ['TFHistory'] = { run = function() require('tfvc.history').cmd_open_web_history() end, desc = 'TFS: Open Web History for current File/Directory', default_mapping = 'w' },
-  ['TFStatus'] = { run = function(opts) require('tfvc.status').cmd_show_telescope_finder(opts) end, desc = 'TFS: Status', nargs = '*', bang = true },
+  ['TFStatus'] = { run = function(opts) require('tfvc.status').cmd_status(opts) end, desc = 'TFS: Status', nargs = '*', bang = true },
   ['TFLoadDiffs'] = { desc = 'TFS: Preload Diffs for changed files', default_mapping = 'pd',
     run = function(opts)
       opts = opts or {}
