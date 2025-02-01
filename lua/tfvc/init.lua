@@ -55,21 +55,13 @@ function M.tf_compare(versionspec, buf_id, force_fresh)
   buf_id = buf_id or vim.api.nvim_get_current_buf()
   versionspec = versionspec or vim.g.default_versionspec
 
-  M.tf_get_version_from_versionspec(path, versionspec, force_fresh, function(temp)
+  M.tf_get_version_from_versionspec(path, versionspec, force_fresh, function(temp_file_path)
+    vim.cmd.diffoff({ bang = true }) -- the bang (! flag) turn off diff for all windows in the current context
+    vim.cmd.diffsplit(temp_file_path)
 
-    -- we need to disable buf mode for other buffers
-    -- otherwise we end up diffing with all those files too
-    -- vim.cmd('bufdo diffoff!')
-    local buffers = vim.api.nvim_list_bufs()
-    for _, current_buf_id in pairs(buffers) do
-      if vim.api.nvim_buf_is_loaded(current_buf_id) then
-        vim.api.nvim_buf_set_option(current_buf_id, "diff", false)
-        --vim.api.nvim_set_option_value("diffthis", false, { buf = current_buf_id } )
-      end
-    end
-
-    vim.cmd.diffsplit(temp)
-    -- vim.api.nvim_set_current_buf(buf_id)
+    -- diffsplit sets the newly loaded file as the current buffer
+    local new_buf = vim.api.nvim_get_current_buf()
+    vim.api.nvim_set_option_value('modifiable', false, { buf = new_buf })
   end)
 end
 
