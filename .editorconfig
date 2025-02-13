@@ -1,0 +1,10 @@
+###############################
+root = true
+# All files
+[*]
+indent_style = space
+charset = utf-8
+
+# XML project files
+[*.lua]
+indent_size = 2
