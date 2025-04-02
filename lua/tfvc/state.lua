@@ -10,7 +10,7 @@ local u = require('tfvc.utils')
 
 ---@class subcommand
 ---@field desc string description
----@field default_mapping string|nil
+---@field default_mapping? string
 ---@field run fun(opts: vim.api.keyset.create_user_command.command_args) implementation
 ---@field complete? any futher completion for subcommand
 
@@ -36,8 +36,8 @@ local u = require('tfvc.utils')
 
 ---@class tfvcState
 ---@field debug boolean
----@field pending_changes table<pendingChange> | nil
----@field pending_changes_last_updated number | nil
+---@field pending_changes? table<pendingChange>
+---@field pending_changes_last_updated? number
 ---@field file_versions table<file_version>
 ---@class tfvcState
 local M = {
@@ -69,7 +69,6 @@ function M.print()
 end
 
 --[[
-// tf workfold output
 $ tf workfold
 ==============================================================================================
 Workspace : localMachine (tfs user)

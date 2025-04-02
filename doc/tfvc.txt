@@ -83,36 +83,35 @@ COMMANDS                                                        *tfvc.commands*
   |TFStatus|
   |TFUndo|
 
-:TFAdd                                                                  *TFAdd*
+:TF add                                                                  *TFAdd*
 - Default keybind: `<leader>ta`
 - Adds the current file to TFS. 
 - Non-blocking equivalent to `:!tf add "%"
 
-:TFCheckout                                                        *TFCheckout*
+:TF checkout                                                        *TFCheckout*
 - Default keybind: `<leader>tc`
 - Check out the current file from TFS.
 - Non-blocking equivalent to `:!tf checkout "%"` 
 
-:TFDiff {version spec?}                                                *TFDiff*
+:TF diff {version spec?}                                                *TFDiff*
 
 - Default keybind: `<leader>tl` (diff with latest)
-- Default keybind: `<leader>td` (prompt for specific version_spec) 
 Diffs the local version of the current file with a specific server version.
 Takes the |tfvc.version_spec| as an argument.
 The version_spec is passed directly to the `tf view command.
 
-To diff with the latest server version, run `:TFDiff T` or just `:TFDiff`. To
-diff with version of a specific changeset i.e CS12345 run `:TFDiff C12345`. To
+To diff with the latest server version, run `:TF diff T` or just `:TF diff`. To
+diff with version of a specific changeset i.e CS12345 run `:TF diff C12345`. To
 diff with a version from a specific Date e.g.: January 1st 2020, run 
-`:TFDiff D2020-01-01`. Any Date-format supported by .NET will work.
+`:TF diff D2020-01-01`. Any Date-format supported by .NET's DateTime Class will work.
 
 Tipp:
 To quickly review your pending changes bevor commiting, you can use |TFDiff|,
 |TFStatus| and |TFLoadDiffs| if you've got a slow server, in combination with
 the quickfix list, the `:cnext` and `cprev` commands and |CTRL-W_o| to
 
-First, run `:TFLoadDiffsDiff` to preload all server files.
-Then open the changed files in telescope with `:TFStatus` and press `<C-q>` to
+First, run `:TF loadDiffs` to preload all server files.
+Then open the changed files in telescope with `:TF status` and press `<C-q>` to
 put the files into the quickfix list.
 
 Then you can use `:cnext` followed by |CTRL-W_o| and |TFDiff| to view and diff

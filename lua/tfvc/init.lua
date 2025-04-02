@@ -5,10 +5,10 @@ local s = require('tfvc.state')
 ---@type tfvc_opts
 M.default_opts = {
   create_default_mappings = false,
+  tf_leader = '<leader>t',
   version_control_web_url = nil,
   workfold = nil,
   tf_path = nil,
-  tf_leader = '<leader>t',
 }
 
 ---@type tfvc_opts
@@ -134,6 +134,9 @@ local function cmd_from_verb(verb, pass_path, print_stdout, callback)
   end
 end
 
+-- TODO: add path completion for commands that take path as (optional) argument
+-- TODO: support directory buffers (like netrw or oil) for commands that operate on files and directories
+
 ---@type table<string,subcommand>
 M.subcommand_tbl = {
   add = {
@@ -146,7 +149,7 @@ M.subcommand_tbl = {
     default_mapping = 'u',
     run = cmd_from_verb('undo', true, false, function ()
       vim.schedule(function () vim.cmd 'edit!' end)
-    end)
+    end),
   },
   delete = {
     desc = "Delete file",
@@ -166,7 +169,7 @@ M.subcommand_tbl = {
   },
   diff = {
     desc = 'Compare local file to Server Version',
-    default_mapping = 'l', nargs = '?', bang = true,
+    default_mapping = 'l',
     run = function (opts)
       local args = opts.fargs or {}
       local spec = vim.g.tf.default_version_spec or "T"
@@ -212,52 +215,45 @@ local function TF(opts)
   local fargs = opts.fargs
   local cmd = fargs[1]
   local args = #fargs > 1 and vim.list_slice(fargs, 2, #fargs) or {}
-  vim.notify(vim.inspect(args))
   local subcommand = M.subcommand_tbl[cmd]
   if subcommand then
     assert(type(subcommand.run) == "function")
     opts.fargs = args
     subcommand.run(opts)
   else
-    vim.notify(cmd_name .. ": Unknown subcommand: " .. cmd, vim.log.levels.ERROR, { title = "tf.nvim" })
-  end
-end
-
-M.keymaps = {
-  { default_mapping = 'd', desc = 'TFS: Diff with specific Version', run = function()
-    M.tf_compare(M.get_versionspec_from_user())
-  end},
-}
-
----@param leader string 
-function M.init_default_mappings(leader)
-
-  local dummyArgs = {
-    fargs = {},
-  }
-
-  for _, mapping in pairs(M.subcommand_tbl) do
-    if mapping.default_mapping then
-      local motion = leader .. mapping.default_mapping
-      vim.keymap.set('n', motion, function() mapping.run(dummyArgs) end, { desc = mapping.desc })
-    end
-  end
-  for _, mapping in pairs(M.keymaps) do
-      local motion = leader .. mapping.default_mapping
-      vim.keymap.set('n', motion, mapping.run, { desc = mapping.desc })
+    vim.notify(cmd_name .. ": Unknown subcommand: " .. cmd, vim.log.levels.ERROR, { title = "tfvc.nvim" })
   end
 end
 
 ---@param opts tfvc_opts?
 function M.setup(opts)
   opts = opts or {}
-  opts = vim.tbl_deep_extend('keep', opts, M.default_opts)
-  if opts.create_default_mappings then
-      M.init_default_mappings(opts.tf_leader)
+  opts = vim.tbl_extend('keep', opts, vim.g.tf)
+  vim.g.tf = opts
+
+  if s.debug then
+    print(vim.inspect(opts))
+  end
+
+  if (opts.create_default_mappings) then
+    local leader = opts.tf_leader
+    local dummyArgs = {
+      fargs = {},
+    }
+    for _, mapping in pairs(M.subcommand_tbl) do
+      if mapping.default_mapping then
+        local motion = leader .. mapping.default_mapping
+        vim.keymap.set('n', motion, function()
+          mapping.run(dummyArgs)
+        end,
+        { desc = mapping.desc })
+      end
+    end
   end
 
   vim.api.nvim_create_user_command(cmd_name, TF, {
     nargs = "+",
+    bang = true,
     range = true,
     desc = "Interacts with TF Version Control",
     complete = function(arg_lead, cmdline, _)

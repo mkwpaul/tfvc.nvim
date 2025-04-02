@@ -1,6 +1,6 @@
 local M = {}
 
---- returns a generator that yields lines from a string
+---@returns a generator that yields lines from a string
 ---@param str string
 function M.line_iter(str)
   local lines = vim.split(str, '\n')
@@ -140,43 +140,6 @@ function M.url_decode(url)
   url = url:gsub("+", " ")
   url = url:gsub("%%(%x%x)", hex_to_char)
   return url
-end
-
----@param opts? {system?:boolean}
-function M.open_url(uri, opts)
-  opts = opts or {}
-  local cmd
-  if vim.fn.has("win32") == 1 then
-    -- escape ampersand
-    uri = uri:gsub('&', '^&')
-    os.execute('start ' .. uri)
-    return
-
-  elseif vim.fn.has("macunix") == 1 then
-    cmd = { "open", uri }
-  else
-    if vim.fn.executable("xdg-open") == 1 then
-      cmd = { "xdg-open", uri }
-    elseif vim.fn.executable("wslview") == 1 then
-      cmd = { "wslview", uri }
-    else
-      cmd = { "open", uri }
-    end
-  end
-
-  vim.system(cmd, { detach = true }, function(obj)
-    local ret = obj.code
-    if ret ~= 0 then
-      vim.schedule(function()
-        local msg = {
-          "Failed to open uri",
-          ret,
-          vim.inspect(cmd),
-        }
-        vim.notify(table.concat(msg, "\n"), vim.log.levels.ERROR)
-      end)
-    end
-  end)
 end
 
 return M

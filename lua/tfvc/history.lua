@@ -101,7 +101,8 @@ function M.cmd_open_web_history()
   if state.debug then
     vim.notify(full_url)
   end
-  u.open_url(full_url)
+  vim.ui.open(full_url)
+  --u.open_url(full_url)
 end
 
 return M
