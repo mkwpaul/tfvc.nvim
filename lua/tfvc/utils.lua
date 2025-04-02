@@ -55,7 +55,8 @@ end
 --- Executes a command and calls the exit_callback when the command is finished.
 ---@param exit_callback nil | fun(obj: table<string, any>)
 ---@param space_separated string[]
-function M.tf_cmd(space_separated, exit_callback)
+---@param print_stdout boolean
+function M.tf_cmd(space_separated, print_stdout, exit_callback)
 
   local s = require('tfvc.state')
   table.insert(space_separated, 1, s.tf())
@@ -63,13 +64,21 @@ function M.tf_cmd(space_separated, exit_callback)
   print('cmd:' .. command_string)
 
   local _ = vim.system(space_separated, nil, function(obj)
-    if obj.code ~= 0 then
-      vim.schedule(function ()
+    vim.schedule(function ()
+      if obj.code ~= 0 then
         local log = command_string .. '\n' .. 'Code:  ' .. obj.code .. '\n' .. obj.stderr .. obj.stdout
         vim.notify(log, vim.log.levels.ERROR)
-      end)
+      end
+
+      if print_stdout and obj.stdout then
+        vim.notify(obj.stdout, vim.log.levels.INFO)
+      end
+    end)
+
+    if obj.code ~= 0 then
       return
     end
+
     local state = require('tfvc.state')
     if state.debug then
       local log = 'Job finished: ' .. command_string .. '\n' .. 'Code:  ' .. obj.code .. '\n' .. obj.stderr .. obj.stdout
@@ -169,6 +178,5 @@ function M.open_url(uri, opts)
     end
   end)
 end
-
 
 return M

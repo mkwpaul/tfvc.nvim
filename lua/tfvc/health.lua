@@ -27,13 +27,13 @@ function M.check()
     health.warn('tfvc: plenary.path not found. Status command will only show full paths.')
   end
 
-  if vim.g.version_control_web_url then
+  if vim.g.tf.version_control_web_url then
     health.ok("tfvc: version_control_web_url set")
   else
     health.warn("tfvc: version_control_web_url not set. Open Web History command will not work. Set the version_control_web_url in tfvc.setup() or execute the tf workfold command")
   end
 
-  if vim.g.workfold then
+  if vim.g.tf.workfold then
     health.ok("tfvc: workfold set")
   else
     health.warn("tfvc: workfold not set. Preset the workfold in tfvc.setup() or execute the tf workfold command. The workfold is required for the Open Web History command")

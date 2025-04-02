@@ -61,7 +61,7 @@ local show_telescope_finder_impl = function(pending_changes, in_cwd, opts)
   pickers.new(themes.get_ivy(opts), def):find()
 end
 
----@param opts cmd_call_args
+---@param opts vim.api.keyset.create_user_command.command_args
 local function cmd_show_telescope_finder(opts)
   local tfvc_status = require 'tfvc.status'
   local parsed = tfvc_status.parse_cmd_args(opts)

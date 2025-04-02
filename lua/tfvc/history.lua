@@ -84,7 +84,7 @@ function M.cmd_open_web_history()
     return
   end
 
-  if not vim.g.version_control_web_url then
+  if not vim.g.tf.version_control_web_url then
     vim.notify('Version control web url not initialized', vim.log.levels.ERROR)
     return
   end
@@ -97,7 +97,7 @@ function M.cmd_open_web_history()
   local escapedServerPath = u.url_encode(serverPath) or ''
   escapedServerPath = escapedServerPath:gsub('%%2E', '.')
 
-  local full_url = vim.g.version_control_web_url .. '/?path=' .. escapedServerPath .. '&_a=history'
+  local full_url = vim.g.tf.version_control_web_url .. '/?path=' .. escapedServerPath .. '&_a=history'
   if state.debug then
     vim.notify(full_url)
   end

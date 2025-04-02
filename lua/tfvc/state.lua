@@ -1,5 +1,21 @@
 local u = require('tfvc.utils')
 
+---@class tfvc_opts
+---@field create_default_mappings boolean
+---@field version_control_web_url? string
+---@field workfold? workfold the default workfold to use. See $tf vc help workfold 
+---@field tf_path? string Full path to the TF executable. If not set, the it will be assumed that the tf executable is in the PATH
+---@field tf_leader? string Changes leader for default keymappings. default value: '<leader>t'. Only applies if create_default_mappings is enabled
+---@field default_version_spec? version_spec version_spec to use when no version_spec is specified
+
+---@class subcommand
+---@field desc string description
+---@field default_mapping string|nil
+---@field run fun(opts: vim.api.keyset.create_user_command.command_args) implementation
+---@field complete? any futher completion for subcommand
+
+---@alias version_spec string see :h version_spec
+
 ---@class pendingChange
 ---@field name string
 ---@field Change string Types of Change. One or more of "Edit, Add, Delete, Encoding" separated by spaces
@@ -14,7 +30,7 @@ local u = require('tfvc.utils')
 ---@field localPath string
 
 ---@class file_version
----@field version_spec string version_spec
+---@field version_spec version_spec
 ---@field local_file string associated local version
 ---@field server_file string local path to server version
 
@@ -30,9 +46,9 @@ local M = {
   file_versions = {},
 }
 
----@param version_spec string
+---@param version_spec version_spec
 ---@param file string
----@return string | nil server_file or null
+---@return string|nil server_file or null
 function M.get_cached_file_version(version_spec, file)
   for _, value in pairs(M.file_versions) do
     if (value.version_spec == version_spec and file == value.local_file) then
@@ -43,7 +59,7 @@ function M.get_cached_file_version(version_spec, file)
 end
 
 function M.tf()
-  return vim.g.tf_path or 'tf'
+  return vim.g.tf.tf_path or 'tf'
 end
 
 function M.print()
@@ -94,10 +110,11 @@ end
 
 ---@return workfold?
 function M.get_workfold_or_get_cached()
-  if vim.g.tfvc_workfold then
-    return vim.g.tfvc_workfold
+
+  if vim.g.tf.workfold then
+    return vim.g.tf.workfold
   end
-  u.tf_cmd({ 'workfold' }, function(obj)
+  u.tf_cmd({ 'workfold' }, false, function(obj)
     if obj.code ~= 0 then
       vim.schedule(function()
         vim.notify('Failed to get workfold: ' .. vim.inspect(obj), vim.log.levels.ERROR)
@@ -113,7 +130,7 @@ function M.get_workfold_or_get_cached()
       return
     end
 
-    vim.g.tfvc_workfold = workfold
+    vim.g.tf.workfold = workfold
   end)
 
   return nil

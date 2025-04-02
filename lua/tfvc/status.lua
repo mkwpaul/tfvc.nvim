@@ -57,7 +57,7 @@ end
 
 ---@param callback function (table<pendingChange>)
 function M.get_pending_changes_async(callback)
-  u.tf_cmd ({ 'status', '/format:xml' }, function(obj)
+  u.tf_cmd ({ 'status', '/format:xml' }, false, function(obj)
     if obj.code ~= 0 then
       vim.schedule(function()
         vim.notify('Failed to get pending changes: ' .. vim.inspect(obj), vim.log.levels.ERROR)
@@ -130,13 +130,10 @@ function M.load_pending_changes_into_qf(fresh, in_cwd)
   end)
 end
 
----@param opts cmd_call_args
+---@param opts vim.api.keyset.create_user_command.command_args
 function M.parse_cmd_args(opts)
   local args = opts.fargs or {}
-  local in_cwd = vim.g.tf_filter_outside_cwd
-  if in_cwd == nil then
-    in_cwd = true
-  end
+  local in_cwd = true
   local fresh = opts.bang
   for _, arg in pairs(args) do
     if arg == 'in_cwd' or arg == 'i' then
