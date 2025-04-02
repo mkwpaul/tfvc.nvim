@@ -1,0 +1,11 @@
+# TFVC.nvim
+
+tfvc.nvim is an unofficial plugin for integration of team foundation verion
+control, referred to as 'tfvc' from here on.
+
+It provides commands to check-out files from tfvc, undo current changes, add
+files, show status, diff pending changes, open history etc.
+
+It also provides default keybinds for those commands (if enabled).
+Tested on Windows 10/11 and TF Version 17.10.34824.3
+This Project is unaffiliated with Microsoft.

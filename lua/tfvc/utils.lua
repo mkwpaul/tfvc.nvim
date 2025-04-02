@@ -47,7 +47,7 @@ function M.is_within_workspace(full_path)
   -- paths on windows are case insensitive by default
   -- i think you can optionally make them case sensitive, but lets not worry about that :^)
   -- I also doubt anyone will use this on a linux system where paths are case sensitive
-  full_path = full_path:lower()
+  full_path = vim.fs.normalize(full_path:lower())
   local cwd = vim.fs.normalize(vim.fn.getcwd(0):lower())
   return vim.startswith(full_path, cwd)
 end

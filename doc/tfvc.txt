@@ -155,7 +155,6 @@ Default |TFStatus| is equivalent to `:TFStatus in_cwd, cached`
 - Undoes any pending changes in the current file.
 - Non-blocking equivalent to `:!tf undo "%"`
 
-
 VERSIONSPEC
                                                             *tfvc.version_spec*
 The complete version_spec format is as follows:
@@ -187,6 +186,12 @@ Run `tf get . /recursive /noprompt` outside of nvim.
 if you have conflicts you can run `tf resolve /noprompt /auto:[strat]
 to resolve them.
 
-- `How do I use nvim as a merge tool?`
+- `How do I delete a file from source control?`
+:!tf delete "%"
+
+- `How do I view changesets or history?`
+Not in nvim. The Web client is decent enough for this.
+
+- `How do I use nvim to resolve merge conflicts?`
 I don't know. You tell me, when you figure it out.
 
