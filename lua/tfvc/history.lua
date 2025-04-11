@@ -102,7 +102,6 @@ function M.cmd_open_web_history()
     vim.notify(full_url)
   end
   vim.ui.open(full_url)
-  --u.open_url(full_url)
 end
 
 return M

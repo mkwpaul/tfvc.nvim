@@ -87,7 +87,7 @@ end
 function M.preload_versions_for_files(files, version_spec, force_fresh)
 
   -- either get existing bufferId for create a new buffer for all files
-  vim.print(vim.inspect(files))
+  -- vim.print(vim.inspect(files))
 
   for _, file in pairs(files) do
     M.tf_get_version_from_versionspec(file, version_spec, force_fresh, function(temp)
@@ -148,6 +148,7 @@ M.subcommand_tbl = {
     desc = 'Undo Pending Changes',
     default_mapping = 'u',
     run = cmd_from_verb('undo', true, false, function ()
+      -- reload file after undoing changes
       vim.schedule(function () vim.cmd 'edit!' end)
     end),
   },

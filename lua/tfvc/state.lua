@@ -1,6 +1,14 @@
 local u = require('tfvc.utils')
 
+---@class tfvcState
+local M = {
+  debug = false,
+  default_status_filter = 'All',
+  file_versions = {},
+}
+
 ---@class tfvc_opts
+---@field project_url string should look something like 'https://dev.azure.com/{organization}/{project}/' or 'http://zesrvtfs:8080/tfs/{collection}/{project}'
 ---@field create_default_mappings boolean
 ---@field version_control_web_url? string
 ---@field workfold? workfold the default workfold to use. See $tf vc help workfold 
@@ -34,17 +42,24 @@ local u = require('tfvc.utils')
 ---@field local_file string associated local version
 ---@field server_file string local path to server version
 
+---@class serverFile : file_version
+---@field bufType 'serverFile'
+
+---@class localFile
+---@field bufType 'localFile'
+---@field server_path string
+---@field isServerFile? boolean
+---@field version_spec? version_spec
+---@field pendingChange? pendingChange
+---@field file_history? any
+
+---@alias bufInfo serverFile|localFile|nil
+
 ---@class tfvcState
 ---@field debug boolean
 ---@field pending_changes? table<pendingChange>
 ---@field pending_changes_last_updated? number
 ---@field file_versions table<file_version>
----@class tfvcState
-local M = {
-  debug = false,
-  default_status_filter = 'All',
-  file_versions = {},
-}
 
 ---@param version_spec version_spec
 ---@param file string
