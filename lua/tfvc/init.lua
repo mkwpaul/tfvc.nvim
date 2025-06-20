@@ -126,7 +126,7 @@ local function cmd_from_verb(verb, pass_path, print_stdout, callback)
     else
       args = { 'vc', verb }
     end
-    u.tf_cmd(args, print_stdout)
+    u.tf_cmd(args, print_stdout, callback)
   end
 end
 
