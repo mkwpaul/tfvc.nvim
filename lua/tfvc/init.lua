@@ -92,7 +92,7 @@ function M.preload_versions_for_files(files, version_spec, force_fresh)
   for _, file in pairs(files) do
     M.tf_get_version_from_versionspec(file, version_spec, force_fresh, function(temp)
       if s.debug then
-        print("Preloaded Version " .. version_spec ..  "  for " .. file .. ": " .. temp)
+        print('Preloaded Version ' .. version_spec ..  '  for ' .. file .. ': ' .. temp)
       end
     end)
   end
@@ -110,7 +110,7 @@ function M.get_versionspec_from_user()
 
 VersionSpec > ]]
 
-  local spec = vim.fn.input { prompt = prompt, default = "", cancelreturn = vim.g.tf.default_version_spec }
+  local spec = vim.fn.input { prompt = prompt, default = '', cancelreturn = vim.g.tf.default_version_spec }
   return spec
 end
 
@@ -126,11 +126,7 @@ local function cmd_from_verb(verb, pass_path, print_stdout, callback)
     else
       args = { 'vc', verb }
     end
-    u.tf_cmd(args, print_stdout, function(obj)
-      if obj.code == 0 and callback then
-        callback(opts, path)
-      end
-    end)
+    u.tf_cmd(args, print_stdout)
   end
 end
 
@@ -153,7 +149,7 @@ M.subcommand_tbl = {
     end),
   },
   delete = {
-    desc = "Delete file",
+    desc = 'Delete file',
     run = cmd_from_verb('delete', true, true)
   },
   info = {
@@ -162,7 +158,7 @@ M.subcommand_tbl = {
     run = cmd_from_verb('info', true, true)
   },
   checkout = {
-    desc = "Checkout file",
+    desc = 'Checkout file',
     default_mapping = 'c',
     run = cmd_from_verb('checkout', true, false, function ()
       vim.schedule(function() vim.cmd 'set noreadonly' end)
@@ -173,7 +169,7 @@ M.subcommand_tbl = {
     default_mapping = 'l',
     run = function (opts)
       local args = opts.fargs or {}
-      local spec = vim.g.tf.default_version_spec or "T"
+      local spec = vim.g.tf.default_version_spec or 'T'
       if #args > 0 then
         spec = args[1]
       end
@@ -207,6 +203,36 @@ M.subcommand_tbl = {
       end)
     end
   },
+  clearCache = {
+    desc = 'Clear any caches for server file versions and current local changes',
+    run = function()
+      local state = require('tfvc.state')
+      state.file_versions = {}
+      state.pending_changes = nil
+    end
+  },
+  rename = {
+    desc = 'Renames / moves file',
+    default_mapping = 'r',
+    run = function (opts)
+      local path = #opts.fargs > 0 and opts.fargs[1] or u.get_current_file('rename')
+      if not path then return end
+      local new_path = vim.fn.input({
+        prompt = 'Enter new Filename: ',
+        default = path,
+        cancelreturn = nil,
+      })
+      if not new_path or new_path == '' then return end
+      local cmd = { 'rename', path, new_path}
+      u.tf_cmd(cmd, false, function (obj)
+        if obj.code == 0 then
+          vim.schedule(function()
+            vim.cmd.edit(new_path)
+          end)
+        end
+      end)
+    end,
+  },
 }
 
 local cmd_name = 'TF'
@@ -218,11 +244,11 @@ local function TF(opts)
   local args = #fargs > 1 and vim.list_slice(fargs, 2, #fargs) or {}
   local subcommand = M.subcommand_tbl[cmd]
   if subcommand then
-    assert(type(subcommand.run) == "function")
+    assert(type(subcommand.run) == 'function')
     opts.fargs = args
     subcommand.run(opts)
   else
-    vim.notify(cmd_name .. ": Unknown subcommand: " .. cmd, vim.log.levels.ERROR, { title = "tfvc.nvim" })
+    vim.notify(cmd_name .. ': Unknown subcommand: ' .. cmd, vim.log.levels.ERROR, { title = 'tfvc.nvim' })
   end
 end
 
@@ -253,19 +279,19 @@ function M.setup(opts)
   end
 
   vim.api.nvim_create_user_command(cmd_name, TF, {
-    nargs = "+",
+    nargs = '+',
     bang = true,
     range = true,
-    desc = "Interacts with TF Version Control",
+    desc = 'Interacts with TF Version Control',
     complete = function(arg_lead, cmdline, _)
       local all_commands = vim.tbl_keys(M.subcommand_tbl)
 
-      local subcmd, subcmd_arg_lead = cmdline:match("^" .. cmd_name .. "[!]*%s(%S+)%s(.*)$")
+      local subcmd, subcmd_arg_lead = cmdline:match('^' .. cmd_name .. '[!]*%s(%S+)%s(.*)$')
       if subcmd and subcmd_arg_lead and M.subcommand_tbl[subcmd] and M.subcommand_tbl[subcmd].complete then
         return M.subcommand_tbl[subcmd].complete(subcmd_arg_lead)
       end
 
-      if cmdline:match("^" .. cmd_name .. "[!]*%s+%w*$") then
+      if cmdline:match('^' .. cmd_name .. '[!]*%s+%w*$') then
         return vim.tbl_filter(function(command)
           return command:find(arg_lead) ~= nil
         end, all_commands)

@@ -86,21 +86,24 @@ function M.change_type_to_icons(change)
   local words = vim.split(change, ' ', { plain=true, trimempty=true})
   local result = {}
   for _, value in pairs(words) do
-    if value == "Add" then
-      table.insert(result, "+")
+    if value == 'Add' then
+      table.insert(result, '+')
     end
-    if value == "Edit" then
-      table.insert(result, "✎")
+    if value == 'Edit' then
+      table.insert(result, '✎')
     end
-    if value == "Delete" then
-      table.insert(result, "␡")
+    if value == 'Delete' then
+      table.insert(result, '␡')
     end
-    if value == "Encoding" then
-      table.insert(result, "🗎")
+    if value == 'Encoding' then
+      table.insert(result, '🗎')
+    end
+    if value == 'Rollback' then
+      table.insert(result, '⎌ ')
     end
   end
 
-  return table.concat(result, " ")
+  return table.concat(result, ' ')
 end
 
 ---@class pending_chagnes_opts

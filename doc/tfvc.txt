@@ -117,20 +117,14 @@ put the files into the quickfix list.
 Then you can use `:cnext` followed by |CTRL-W_o| and |TFDiff| to view and diff
 the next file.
 
-:TFHistory                                                          *TFHistory*
+:TF history                                                          *:TF-history*
 
 - Default keybind: `<leader>tw`
 Opens the history of the current file in a browser.
 Requires the `version_control_web_url` to be set during |tfvc.setup|
 The |tfvc.workfold| should also be setup to avoid unnecessary queries.
 
-:TFLoadStatus                                                    *TFLoadStatus*
-
-- Default keybind: `<leader>tps` -- [T]FVC [P]reload [S]tatus]
-- Preloads the status (pending changes) without showing them.
-Use |TFStatus| to show them afterwards.
-
-:TFLoadDiffs [version spec]                                       *TFLoadDiffs*
+:TF loadDiffs [version spec]                                     *:TF-loadDiffs*
 - Default keybind: `<leader>tpd` -- [T]FVC [P]reload [D]iffs
 - Preloads a specific server version of all files with pending changes.
 
@@ -147,7 +141,7 @@ Optional flags: `all`, `cached`, `fresh`, `in_cwd` or their initials
 - `cached` load pending changes from cache if availible, otherwise query fresh
 - `fresh` ignore cache for pending changes and query from TF.exe
 
-Default |TFStatus| is equivalent to `:TFStatus in_cwd, cached`
+Default |TF-status| is equivalent to `:TFStatus in_cwd, cached`
 
 :TFUndo                                                                *TFUndo*
 - Default keybind: `<leader>tu`

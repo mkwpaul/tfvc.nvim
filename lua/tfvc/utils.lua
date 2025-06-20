@@ -53,7 +53,7 @@ function M.is_within_workspace(full_path)
 end
 
 --- Executes a command and calls the exit_callback when the command is finished.
----@param exit_callback nil | fun(obj: table<string, any>)
+---@param exit_callback nil | fun(obj: vim.SystemCompleted)
 ---@param space_separated string[]
 ---@param print_stdout boolean
 function M.tf_cmd(space_separated, print_stdout, exit_callback)

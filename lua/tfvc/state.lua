@@ -58,7 +58,6 @@ local M = {
 ---@class tfvcState
 ---@field debug boolean
 ---@field pending_changes? table<pendingChange>
----@field pending_changes_last_updated? number
 ---@field file_versions table<file_version>
 
 ---@param version_spec version_spec
