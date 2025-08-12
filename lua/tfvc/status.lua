@@ -1,6 +1,6 @@
 local u = require('tfvc.utils')
-local s = require('tfvc.state')
 local xmlparser = require('tfvc.xmlparser')
+local s = vim.g.tf
 
 local M = {}
 
@@ -86,23 +86,12 @@ function M.change_type_to_icons(change)
   local words = vim.split(change, ' ', { plain=true, trimempty=true})
   local result = {}
   for _, value in pairs(words) do
-    if value == 'Add' then
-      table.insert(result, '+')
-    end
-    if value == 'Edit' then
-      table.insert(result, '✎')
-    end
-    if value == 'Delete' then
-      table.insert(result, '␡')
-    end
-    if value == 'Encoding' then
-      table.insert(result, '🗎')
-    end
-    if value == 'Rollback' then
-      table.insert(result, '⎌ ')
-    end
+    if value == 'Add' then table.insert(result, '+') end
+    if value == 'Edit' then table.insert(result, '✎') end
+    if value == 'Delete' then table.insert(result, '🗑') end
+    if value == 'Encoding' then table.insert(result, '🗎') end
+    if value == 'Rollback' then table.insert(result, '←') end
   end
-
   return table.concat(result, ' ')
 end
 
@@ -123,7 +112,7 @@ function M.load_pending_changes_into_qf(fresh, in_cwd)
         return {
           filename = change.Local,
           valid = true,
-          text = change.name,
+          text = M.change_type_to_icons(change.Change) .. ' ' .. change.Change
         }
       end, pending_changes)
 
@@ -136,21 +125,16 @@ end
 ---@param opts vim.api.keyset.create_user_command.command_args
 function M.parse_cmd_args(opts)
   local args = opts.fargs or {}
-  local in_cwd = true
+
+  local in_cwd = s.filter_status_by_cwd
+  if in_cwd == nil then in_cwd = true end
+
   local fresh = opts.bang
   for _, arg in pairs(args) do
-    if arg == 'in_cwd' or arg == 'i' then
-      in_cwd = true
-    end
-    if arg == 'all' or arg == 'a' then
-      in_cwd = false
-    end
-    if arg == 'fresh' or arg == 'f' then
-      fresh = true
-    end
-    if arg == 'cached' or arg == 'c' then
-      fresh = false
-    end
+    if arg == 'in_cwd' or arg == 'i' then in_cwd = true end
+    if arg == 'all' or arg == 'a' then in_cwd = false end
+    if arg == 'fresh' or arg == 'f' then fresh = true end
+    if arg == 'cached' or arg == 'c' then fresh = false end
   end
 
   return { fresh = fresh, in_cwd = in_cwd, }

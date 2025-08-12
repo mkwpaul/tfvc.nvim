@@ -20,11 +20,18 @@ function M.check()
     health.warn('tfvc: telescope not found. Status command will not work. Install telescope via your package manager')
   end
 
-  local plenary = pcall(require, 'plenary.path')
-  if plenary then
+  local plenary_path = pcall(require, 'plenary.path')
+  if plenary_path then
     health.ok('tfvc: plenary.path found')
   else
     health.warn('tfvc: plenary.path not found. Status command will only show full paths.')
+  end
+
+  local plenary_curl = pcall(require, 'plenary.path')
+  if plenary_curl then
+    health.ok('tfvc: plenary.curl found')
+  else
+    health.warn('tfvc: plenary.curl not found. Commands thta rely on making web requests will not work')
   end
 
   if vim.g.tf.version_control_web_url then

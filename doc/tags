@@ -1,9 +1,8 @@
+:TF-history	tfvc.txt	/*:TF-history*
+:TF-loadDiffs	tfvc.txt	/*:TF-loadDiffs*
 TFAdd	tfvc.txt	/*TFAdd*
 TFCheckout	tfvc.txt	/*TFCheckout*
 TFDiff	tfvc.txt	/*TFDiff*
-TFHistory	tfvc.txt	/*TFHistory*
-TFLoadDiffs	tfvc.txt	/*TFLoadDiffs*
-TFLoadStatus	tfvc.txt	/*TFLoadStatus*
 TFStatus	tfvc.txt	/*TFStatus*
 TFUndo	tfvc.txt	/*TFUndo*
 tfvc.commands	tfvc.txt	/*tfvc.commands*

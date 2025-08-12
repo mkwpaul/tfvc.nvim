@@ -1,20 +1,23 @@
 local u = require('tfvc.utils')
 
----@class tfvcState
-local M = {
-  debug = false,
-  default_status_filter = 'All',
-  file_versions = {},
-}
+---@class tfvcState : tfvc_opts
+---@field debug boolean?
+---@field pending_changes? table<pendingChange>
+---@field file_versions? table<file_version>
+ local M = vim.g.tf or {}
+ vim.g.tf = M;
 
 ---@class tfvc_opts
 ---@field project_url string should look something like 'https://dev.azure.com/{organization}/{project}/' or 'http://zesrvtfs:8080/tfs/{collection}/{project}'
 ---@field create_default_mappings boolean
 ---@field version_control_web_url? string
+---@field filter_status_by_cwd? boolean
 ---@field workfold? workfold the default workfold to use. See $tf vc help workfold 
 ---@field tf_path? string Full path to the TF executable. If not set, the it will be assumed that the tf executable is in the PATH
 ---@field tf_leader? string Changes leader for default keymappings. default value: '<leader>t'. Only applies if create_default_mappings is enabled
 ---@field default_version_spec? version_spec version_spec to use when no version_spec is specified
+---@field diff_hide_split? boolean if true, then hide the buffer that is compared against, when using tf diff
+---@field diff_open_folds? boolean if true, then don't collapse regions without changes, when using tf diff
 
 ---@class subcommand
 ---@field desc string description
@@ -55,16 +58,12 @@ local M = {
 
 ---@alias bufInfo serverFile|localFile|nil
 
----@class tfvcState
----@field debug boolean
----@field pending_changes? table<pendingChange>
----@field file_versions table<file_version>
 
 ---@param version_spec version_spec
 ---@param file string
 ---@return string|nil server_file or null
 function M.get_cached_file_version(version_spec, file)
-  for _, value in pairs(M.file_versions) do
+  for _, value in pairs(M.file_versions or {}) do
     if (value.version_spec == version_spec and file == value.local_file) then
       return value.server_file
     end
@@ -73,13 +72,7 @@ function M.get_cached_file_version(version_spec, file)
 end
 
 function M.tf()
-  return vim.g.tf.tf_path or 'tf'
-end
-
-function M.print()
-  vim.schedule(function()
-    vim.notify (vim.inspect(M))
-  end)
+  return M.tf_path or 'tf'
 end
 
 --[[
@@ -124,8 +117,8 @@ end
 ---@return workfold?
 function M.get_workfold_or_get_cached()
 
-  if vim.g.tf.workfold then
-    return vim.g.tf.workfold
+  if M.workfold then
+    return M.workfold
   end
   u.tf_cmd({ 'workfold' }, false, function(obj)
     if obj.code ~= 0 then
@@ -143,7 +136,7 @@ function M.get_workfold_or_get_cached()
       return
     end
 
-    vim.g.tf.workfold = workfold
+    M.workfold = workfold
   end)
 
   return nil
