@@ -30,7 +30,7 @@ local function iter_xml(node, changes)
     ---@type xmlPendingChange
     local props = node.attrs
     local pendingChange = {
-      Change = props.chg,
+      Change = props.chg or '',
       Local = vim.fs.normalize(props["local"]),
       item = props.item,
       type = props["type"],
@@ -83,7 +83,7 @@ function M.do_with_pending_changes(force_fresh, callback)
 end
 
 function M.change_type_to_icons(change)
-  local words = vim.split(change, ' ', { plain=true, trimempty=true})
+  local words = vim.split(change or '', ' ', { plain=true, trimempty=true})
   local result = {}
   for _, value in pairs(words) do
     if value == 'Add' then table.insert(result, '+') end

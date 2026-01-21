@@ -12,7 +12,6 @@ function M.map_local_path_to_server_path(localPath, workfold)
   return serverPath
 end
 
-
 function M.cmd_open_web_history()
   local workfold = state.get_workfold_or_get_cached()
   if not workfold then

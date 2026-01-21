@@ -7,6 +7,7 @@ local u = require('tfvc.utils')
  local M = vim.g.tf or {}
  vim.g.tf = M;
 
+
 ---@class tfvc_opts
 ---@field project_url string should look something like 'https://dev.azure.com/{organization}/{project}/' or 'http://zesrvtfs:8080/tfs/{collection}/{project}'
 ---@field create_default_mappings boolean
@@ -16,8 +17,9 @@ local u = require('tfvc.utils')
 ---@field tf_path? string Full path to the TF executable. If not set, the it will be assumed that the tf executable is in the PATH
 ---@field tf_leader? string Changes leader for default keymappings. default value: '<leader>t'. Only applies if create_default_mappings is enabled
 ---@field default_version_spec? version_spec version_spec to use when no version_spec is specified
----@field diff_hide_split? boolean if true, then hide the buffer that is compared against, when using tf diff
----@field diff_open_folds? boolean if true, then don't collapse regions without changes, when using tf diff
+
+-- ---@field diff_hide_split? boolean if true, then hide the buffer that is compared against, when using tf diff
+-- ---@field diff_open_folds? boolean if true, then don't collapse regions without changes, when using tf diff
 
 ---@class subcommand
 ---@field desc string description
@@ -58,6 +60,8 @@ local u = require('tfvc.utils')
 
 ---@alias bufInfo serverFile|localFile|nil
 
+
+M.file_versions = {}
 
 ---@param version_spec version_spec
 ---@param file string

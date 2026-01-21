@@ -58,7 +58,7 @@ local show_telescope_finder_impl = function(pending_changes, in_cwd, opts)
   local pickers = require "telescope.pickers"
   local themes = require "telescope.themes"
 
-  pickers.new(themes.get_ivy(opts), def):find()
+  pickers.new(opts, def):find()
 end
 
 ---@param opts vim.api.keyset.create_user_command.command_args
@@ -76,6 +76,6 @@ return telescope.register_extension({
   setup = function (_, _)
   end,
   exports = {
-    status = cmd_show_telescope_finder,
+    tf_status = cmd_show_telescope_finder,
   },
 })
