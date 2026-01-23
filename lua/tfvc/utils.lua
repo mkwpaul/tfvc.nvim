@@ -26,7 +26,8 @@ function M.trim(str)
   if not str then
     return ''
   end
-  return string.gsub(str, '^%s*(.-)%s*$', '%1')
+  local rep, _ = string.gsub(str, '^%s*(.-)%s*$', '%1')
+  return rep
 end
 
 ---@param local_path string
@@ -71,12 +72,12 @@ end
 ---@param command string[] arguments to pass to TF.exe
 ---@param opts tf_cmd_opts?
 ---@param callback fun(obj: vim.SystemCompleted)?
-function M.tf_cmd2(command, opts, callback)
+function M.tf_cmd(command, opts, callback)
 
   opts = opts or {}
 
   local s = require('tfvc.state')
-  table.insert(command, 1, s.tf())
+  table.insert(command, 1, s.user_vars.executable_path)
   local command_string = table.concat(command, ' ')
   if not opts.suppress_echo then
     print('cmd:' .. command_string)
@@ -95,7 +96,7 @@ function M.tf_cmd2(command, opts, callback)
     end)
 
     local state = require('tfvc.state')
-    if state.debug then
+    if state.user_vars.debug then
       local log = 'Job finished: ' .. command_string .. '\n' .. 'Code:  ' .. obj.code .. '\n' .. obj.stderr .. obj.stdout
       vim.schedule(function()
         vim.notify(log, nil, nil)
@@ -107,14 +108,15 @@ function M.tf_cmd2(command, opts, callback)
     end
 
     if callback then
-      if type(vim.g.tf_output_encoding) == 'string' then
+      local source_enc = s.user_vars.output_encoding
+      if type(source_enc) == 'string' then
         local stdout = nil
         local stderr = nil
         if obj.stdout and obj.stdout ~= '' then
-          stdout = vim.iconv(obj.stdout or '', vim.g.tf_output_encoding, 'UTF-8')
+          stdout = vim.iconv(obj.stdout or '', source_enc, 'UTF-8')
         end
         if obj.stderr and obj.stderr ~= '' then
-          stderr = vim.iconv(obj.stderr or '', vim.g.tf_output_encoding, 'UTF-8')
+          stderr = vim.iconv(obj.stderr or '', source_enc, 'UTF-8')
         end
         obj = {
           stdout = stdout,
@@ -137,10 +139,10 @@ end
 
 ---@type table<string, fun(buf: number, uri: string):string> dictionary of uri-schemes and functions that resolve a local path for given a buffer and uri with that scheme
 local schemeMappers = {
-  ['file:'] = function(buf, uri)
+  ['file:'] = function(_, uri)
     return M.file_uri_to_path(uri)
   end,
-  ['oil:'] = function (buf, uri)
+  ['oil:'] = function (buf, _)
     ---@diagnostic disable-next-line: return-type-mismatch
     return require('oil').get_current_dir(buf)
   end
@@ -196,7 +198,7 @@ end
 ---@param callback fun(temp_file_path : string) continuation callback
 function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callback)
   local s = require 'tfvc.state'
-  versionspec = versionspec or s.default_version_spec
+  versionspec = versionspec or s.user_vars.default_version_spec
 
   ---@type table<file_version>
   local cache = s.file_versions or {}
@@ -210,7 +212,7 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
 
   local temp = vim.fn.tempname()
   local cmd = { 'vc', 'view', '/version:' .. versionspec, path, '/output:' .. temp }
-  M.tf_cmd2(cmd, nil, vim.schedule_wrap(function(obj)
+  M.tf_cmd(cmd, nil, vim.schedule_wrap(function(obj)
     if obj.code == 0 then
       if obj.stdout then
         print(obj.stdout)

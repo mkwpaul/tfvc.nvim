@@ -1,6 +1,6 @@
 local u = require('tfvc.utils')
 local xmlparser = require('tfvc.xmlparser')
-local s = vim.g.tf
+local s = require('tfvc.state')
 
 local M = {}
 
@@ -55,9 +55,9 @@ local function parse_status_xml(status_xml)
   return changes
 end
 
----@param callback function (table<pendingChange>)
+---@param callback fun(changes:pendingChange[])
 function M.get_pending_changes_async(callback)
-  u.tf_cmd2({ 'status', '/format:xml' }, nil, function(obj)
+  u.tf_cmd({ 'status', '/format:xml' }, nil, function(obj)
     if obj.code ~= 0 then
       vim.schedule(function()
         vim.notify('Failed to get pending changes: ' .. vim.inspect(obj), vim.log.levels.ERROR)
@@ -72,7 +72,7 @@ function M.get_pending_changes_async(callback)
 end
 
 ---@param force_fresh boolean 
----@param callback fun(table<pendingChange>)
+---@param callback fun(changes:pendingChange[])
 function M.do_with_pending_changes(force_fresh, callback)
   local pending_changes = s.pending_changes
   if pending_changes == nil or force_fresh then
@@ -126,7 +126,7 @@ end
 function M.parse_cmd_args(opts)
   local args = opts.fargs or {}
 
-  local in_cwd = s.filter_status_by_cwd
+  local in_cwd = s.user_vars.filter_status_by_cwd
   if in_cwd == nil then in_cwd = true end
 
   local fresh = opts.bang

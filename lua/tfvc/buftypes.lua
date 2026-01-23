@@ -21,14 +21,19 @@ local default_history_limit = 300
 -- instead of specifying text encoding we can convert the text to utf-8 using iconv
 -- but i'm not sure how to make custom buffer-size work
 --
-local test = [[cmd /C "mode con:cols=200 lines=58 & tf history . /recursive /stopafter:100 /noprompt]]
+-- local test = [[cmd /C "mode con:cols=200 lines=58 & tf history . /recursive /stopafter:100 /noprompt]]
 
---vim.g.tf_output_encoding = nil
+local function get_changeset_web_url(changeset)
+  local s = require('tfvc.state')
+  local header = s.user_vars.version_control_web_url .. '/changeset/'.. changeset
+  return header
+end
 
 ---@type tf_cmd_opts
 local tfcmdOpts = {
   suppress_echo = true,
   return_stderr_on_failure = true,
+  debug = true,
 }
 
 vim.api.nvim_create_autocmd('BufReadCmd', {
@@ -43,27 +48,47 @@ vim.api.nvim_create_autocmd('BufReadCmd', {
     vim.api.nvim_set_option_value('buftype', 'nofile', bufOpt)
     vim.api.nvim_set_option_value('swapfile', false, bufOpt)
 
+    local vars = require('tfvc.state').user_vars
+
     local path = args.file:gsub('tfvc:///history/', '') or '.'
-    local limit = vim.g.tf_history_limit or default_history_limit
+    local limit = vars.history_entry_limit
     local cmd = { 'history',  path, '/recursive', '/noprompt', '/stopafter:'..limit, '/format:brief' }
     local u = require('tfvc.utils')
-    u.tf_cmd2(cmd, tfcmdOpts, vim.schedule_wrap(function(obj)
+    u.tf_cmd(cmd, tfcmdOpts, vim.schedule_wrap(function(obj)
       -- Replace buffer content with command output
       vim.api.nvim_set_option_value('filetype', 'tf_history', bufOpt)
       vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
       local output = obj.stdout or obj.stderr
       local lines = vim.split(output, '\r\n')
+      -- table.insert(lines, 1, "# Keymaps: '<CR>': View Changeset; 'D': View Diff'")
       vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
       vim.api.nvim_set_option_value('modifiable', false, bufOpt)
       vim.api.nvim_set_option_value('modified', false, bufOpt)
 
-      vim.keymap.set('n', '<CR>', function ()
+      -- keymaps
+      local function open_cs()
         local line = vim.api.nvim_get_current_line()
         local cs_number = line:gmatch('%d+')()
         if cs_number then
           vim.cmd('e tfvc:///changeset/'..cs_number)
         end
-      end, { buffer = buf })
+      end
+
+      local keymapOpt = { buffer = buf }
+      vim.keymap.set('n', '<CR>', open_cs, keymapOpt)
+      vim.keymap.set('n', 'gd', open_cs, keymapOpt)
+      vim.keymap.set('n', 'gx', function ()
+        local line = vim.api.nvim_get_current_line()
+        local cs_number = line:gmatch('%d+')()
+        if cs_number then
+          vim.ui.open(get_changeset_web_url(cs_number));
+        end
+      end, keymapOpt)
+
+      -- vim.keymap.set('n', '<M->', function ()
+      --   local uri = vim.fs.dirname(args.file)
+      --     vim.cmd.edit(uri)
+      -- end, keymapOpt)
     end))
   end,
 })
@@ -85,18 +110,65 @@ vim.api.nvim_create_autocmd('BufReadCmd', {
     local cmd = { 'changeset', cs, '/noprompt',  }
 
     local u = require('tfvc.utils')
-    u.tf_cmd2(cmd, tfcmdOpts, vim.schedule_wrap(function(obj)
+    u.tf_cmd(cmd, tfcmdOpts, vim.schedule_wrap(function(obj)
       -- Replace buffer content with command output
       vim.api.nvim_set_option_value('filetype', 'tf_changeset', bufOpt)
       vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
       local output = obj.stdout or obj.stderr
       local lines = vim.split(output, '\r\n')
+      local header = get_changeset_web_url(cs)
+      table.insert(lines, 1, header);
       vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
       vim.api.nvim_set_option_value('modifiable', false, bufOpt)
       vim.api.nvim_set_option_value('modified', false, bufOpt)
     end))
   end,
 })
+
+-- the diff commmand of the tf cli compares per default the state of changeset,
+-- with your local files which is usually not what you want
+--
+-- we usually want to know what the changeset changed
+-- but if specify a version range between the previous changeset and our specified changeset
+-- then it takes forever to load
+-- I assume that the tf tool downloads two versions for every single file under the working dir.
+-- ... honestly pretty weak of the tf cli tool.
+
+-- vim.api.nvim_create_autocmd('BufReadCmd', {
+--   pattern = 'tfvc:///diff-cs/*',
+--   group = augroup_tfvc,
+--   callback = function(args)
+--     local buf = args.buf
+--     local bufOpt = { buf = buf }
+--
+--     -- tell neovim that this buffer is now read-only and modifiable by us
+--     vim.api.nvim_set_option_value('modifiable', true, bufOpt)
+--     vim.api.nvim_set_option_value('swapfile', false, bufOpt)
+--     vim.api.nvim_set_option_value('buftype', 'nofile', bufOpt)
+--
+--     local versionspec = args.file:sub(#('tfvc:///diff-cs/') + 1)
+--
+--     -- IDEA: use diff command to see changeset changes,
+--     -- would be easy to add,
+--     -- but would be good enough to not use the web client anymore?
+--     -- you could also easily add navigation from the history list for this
+--     local cmd = { 'diff', '/format:Context', '/version:'.. versionspec, '/ignorecase', '/ignorespace', '/noprompt', '/recursive', '.'  }
+--
+--     vim.print(vim.inspect(cmd))
+--
+--     local u = require('tfvc.utils')
+--     u.tf_cmd2(cmd, tfcmdOpts, vim.schedule_wrap(function(obj)
+--       -- Replace buffer content with command output
+--       vim.api.nvim_set_option_value('filetype', 'diff', bufOpt)
+--       vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
+--       local output = obj.stdout or obj.stderr
+--       local lines = vim.split(output, '\r\n')
+--       vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+--       vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+--       vim.api.nvim_set_option_value('modified', false, bufOpt)
+--     end))
+--   end,
+-- })
 
 vim.api.nvim_create_autocmd('BufReadCmd', {
   pattern = 'tfvc:///files/*',

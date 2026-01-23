@@ -6,7 +6,7 @@ function M.check()
 
   health.start("tfvc report")
 
-  local tf = state.tf()
+  local tf = state.user_vars.executable_path
   if vim.fn.executable(tf) == 1 then
     health.ok("tfvc: tf executable '" .. tf .."' found")
   else
@@ -34,13 +34,13 @@ function M.check()
     health.warn('tfvc: plenary.curl not found. Commands thta rely on making web requests will not work')
   end
 
-  if vim.g.tf.version_control_web_url then
+  if state.user_vars.version_control_web_url then
     health.ok("tfvc: version_control_web_url set")
   else
     health.warn("tfvc: version_control_web_url not set. Open Web History command will not work. Set the version_control_web_url in tfvc.setup() or execute the tf workfold command")
   end
 
-  if vim.g.tf.workfold then
+  if state.user_vars.workfold then
     health.ok("tfvc: workfold set")
   else
     health.warn("tfvc: workfold not set. Preset the workfold in tfvc.setup() or execute the tf workfold command. The workfold is required for the Open Web History command")

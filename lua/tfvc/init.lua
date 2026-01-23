@@ -2,22 +2,6 @@ local M = {}
 local u = require('tfvc.utils')
 local s = require('tfvc.state')
 
----@type tfvc_opts
-M.default_opts = {
-  create_default_mappings = false,
-  tf_leader = '<leader>t',
-  version_control_web_url = nil,
-  workfold = nil,
-  tf_path = nil,
-  filter_status_by_cwd = true,
-
----@diagnostic disable-next-line: assign-type-mismatch
-  project_url = nil,
-}
-
----@type tfvc_opts
-s = vim.tbl_extend('keep', s, M.default_opts, {})
-
 ---@class tf_diff_opts
 ---@field versionspec version_spec? Which Versionspec to use. See :h tfvc.version_spec
 ---@field buf_id number? Which Buffer to use.
@@ -33,15 +17,15 @@ function M.tf_compare__(opts)
   local versionspec = opts.versionspec
   local buf_id = opts.buf_id
 
-  if opts.no_split == nil then opts.no_split = vim.g.tf_no_split  end
-  if opts.open_folds == nil then opts.open_folds = vim.g.tf_open_folds end
+  if opts.no_split == nil then opts.no_split = s.user_vars.diff_no_split  end
+  if opts.open_folds == nil then opts.open_folds = s.user_vars.diff_open_folds end
 
   local path = u.get_current_file('tf_compare', buf_id)
   if not path then
     return
   end
   buf_id = buf_id or vim.api.nvim_get_current_buf()
-  versionspec = versionspec or s.default_version_spec or 'T'
+  versionspec = versionspec or s.user_vars.default_versionspec
 
   u.tf_get_version_from_versionspec(path, versionspec, opts.force_fresh, function(temp_file_path)
     -- the bang (! flag) turns off diff-mode for all windows in the current context
@@ -66,15 +50,15 @@ function M.tf_compare(opts)
   local versionspec = opts.versionspec
   local buf_id = opts.buf_id
 
-  if opts.no_split == nil then opts.no_split = vim.g.tf_no_split  end
-  if opts.open_folds == nil then opts.open_folds = vim.g.tf_open_folds end
+  if opts.no_split == nil then opts.no_split = s.user_vars.diff_no_split  end
+  if opts.open_folds == nil then opts.open_folds = s.user_vars.diff_open_folds end
 
   local path = u.get_current_file('tf_compare', buf_id)
   if not path then
     return
   end
 
-  versionspec = versionspec or s.default_version_spec or 'T'
+  versionspec = versionspec or s.user_vars.default_versionspec
 
   -- the bang (! flag) turns off diff-mode for all windows in the current context
   vim.cmd.diffoff({ bang = true })
@@ -95,7 +79,7 @@ function M.toggle_diff()
   local isDiff = vim.api.nvim_win_get_option(0, 'diff')
   if isDiff then
     vim.cmd(':diffo!')
-    for key, value in pairs(vim.api.nvim_tabpage_list_wins(0)) do
+    for _, value in pairs(vim.api.nvim_tabpage_list_wins(0)) do
       local buf_in_win = vim.api.nvim_win_get_buf(value)
       if vim.b[buf_in_win].tf_isServerFile then
         vim.api.nvim_win_close(value, true)
@@ -114,13 +98,12 @@ function M.preload_versions_for_files(files, version_spec, force_fresh)
 
   for _, file in pairs(files) do
     u.tf_get_version_from_versionspec(file, version_spec, force_fresh, function(temp)
-      if s.debug then
+      if s.user_vars.debug then
         print('Preloaded Version ' .. version_spec ..  '  for ' .. file .. ': ' .. temp)
       end
     end)
   end
 end
-
 
 local function cmd_from_verb(verb, pass_path, print_stdout, callback)
 
@@ -134,7 +117,7 @@ local function cmd_from_verb(verb, pass_path, print_stdout, callback)
     else
       args = { 'vc', verb }
     end
-    u.tf_cmd2(args, { print_stdout = print_stdout } , callback)
+    u.tf_cmd(args, { print_stdout = print_stdout } , callback)
   end
 end
 
@@ -146,7 +129,7 @@ end
 -- end
 
 ---@type table<string,subcommand>
-M.subcommand_tbl = {
+M.commands = {
   add = {
     desc = 'Add current File to Source Control',
     default_mapping = 'a',
@@ -244,7 +227,7 @@ M.subcommand_tbl = {
       })
       if not new_path or new_path == '' then return end
       local cmd = { 'rename', path, new_path}
-      u.tf_cmd2(cmd, nil, function (obj)
+      u.tf_cmd(cmd, nil, function (obj)
         if obj.code == 0 then
           vim.schedule(function()
             vim.cmd.edit(new_path)
@@ -259,7 +242,7 @@ M.subcommand_tbl = {
     complete = 'file',
     run = function (opts)
       local path = #opts.fargs > 0 and opts.fargs[1] or u.get_current_file('history') or '.'
-      local opening_cmd = vim.g.tf_history_open_cmd or 'e'
+      local opening_cmd = s.user_vars.history_open_cmd
       vim.cmd (opening_cmd .. ' tfvc:///history/'.. path)
     end
   }
@@ -272,7 +255,7 @@ local function TF(opts)
   local fargs = opts.fargs
   local cmd = fargs[1]
   local args = #fargs > 1 and vim.list_slice(fargs, 2, #fargs) or {}
-  local subcommand = M.subcommand_tbl[cmd]
+  local subcommand = M.commands[cmd]
   if subcommand then
     assert(type(subcommand.run) == 'function')
     opts.fargs = args
@@ -282,57 +265,50 @@ local function TF(opts)
   end
 end
 
--- TODO: Fix state-management and option passing
----@param opts tfvc_opts?
-function M.setup(opts)
-  local opts = vim.g.tf or {}
-  opts = vim.tbl_extend('keep', opts, s)
-  vim.g.tf = opts
-
-  if s.debug then
-    print(vim.inspect(opts))
-  end
-
-  if (opts.create_default_mappings) then
-    local leader = opts.tf_leader
-    local dummyArgs = {
-      fargs = {},
-    }
-    for _, mapping in pairs(M.subcommand_tbl) do
-      if mapping.default_mapping then
-        local motion = leader .. mapping.default_mapping
-        vim.keymap.set('n', motion, function()
-          mapping.run(dummyArgs)
-        end,
+function M.set_default_keymaps()
+  local leader =  '<leader>t'
+  local dummyArgs = {
+    fargs = {},
+  }
+  for _, mapping in pairs(M.commands) do
+    if mapping.default_mapping then
+      local motion = leader .. mapping.default_mapping
+      vim.keymap.set('n', motion, function()
+        mapping.run(dummyArgs)
+      end,
         { desc = mapping.desc })
-      end
     end
   end
+end
 
-  vim.api.nvim_create_user_command(cmd_name, TF, {
-    nargs = '+',
-    bang = true,
-    range = true,
-    desc = 'Interacts with TF Version Control',
-    complete = function(arg_lead, cmdline, _)
-      local all_commands = vim.tbl_keys(M.subcommand_tbl)
+vim.api.nvim_create_user_command(cmd_name, TF, {
+  nargs = '+',
+  bang = true,
+  range = true,
+  desc = 'Interacts with TF Version Control',
+  complete = function(arg_lead, cmdline, _)
+    local all_commands = vim.tbl_keys(M.commands)
 
-      local subcmd, subcmd_arg_lead = cmdline:match('^' .. cmd_name .. '[!]*%s(%S+)%s(.*)$')
-      if subcmd and subcmd_arg_lead and M.subcommand_tbl[subcmd] and M.subcommand_tbl[subcmd].complete then
-        local complete = M.subcommand_tbl[subcmd].complete;
-        return M.subcommand_tbl[subcmd].complete(subcmd_arg_lead)
-      end
+    local subcmd, subcmd_arg_lead = cmdline:match('^' .. cmd_name .. '[!]*%s(%S+)%s(.*)$')
+    if subcmd and subcmd_arg_lead and M.commands[subcmd] and M.commands[subcmd].complete then
+      --local complete = M.commands[subcmd].complete;
+      return M.commands[subcmd].complete(subcmd_arg_lead)
+    end
 
-      if cmdline:match('^' .. cmd_name .. '[!]*%s+%w*$') then
-        return vim.tbl_filter(function(command)
-          return command:find(arg_lead) ~= nil
-        end, all_commands)
-      end
-    end,
-  })
+    if cmdline:match('^' .. cmd_name .. '[!]*%s+%w*$') then
+      return vim.tbl_filter(function(command)
+        return command:find(arg_lead) ~= nil
+      end, all_commands)
+    end
+  end,
+})
 
-  require 'tfvc.buftypes'
+require 'tfvc.buftypes'
 
+---@param opts tfvc_user_vars
+function M.setup(opts)
+  local tf = vim.g.tf or {}
+  vim.g.tf = vim.tbl_deep_extend('force', tf, opts)
 end
 
 return M
