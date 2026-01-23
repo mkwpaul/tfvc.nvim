@@ -124,7 +124,7 @@ function M.get_workfold_or_get_cached()
   if M.workfold then
     return M.workfold
   end
-  u.tf_cmd({ 'workfold' }, false, function(obj)
+  u.tf_cmd2({ 'workfold' }, nil, function(obj)
     if obj.code ~= 0 then
       vim.schedule(function()
         vim.notify('Failed to get workfold: ' .. vim.inspect(obj), vim.log.levels.ERROR)

@@ -28,7 +28,7 @@ s = vim.tbl_extend('keep', s, M.default_opts, {})
 --- field callback fun(new_buf : number)? optional callback
 
 ---@param opts tf_diff_opts
-function M.tf_compare(opts)
+function M.tf_compare__(opts)
 
   local versionspec = opts.versionspec
   local buf_id = opts.buf_id
@@ -43,7 +43,7 @@ function M.tf_compare(opts)
   buf_id = buf_id or vim.api.nvim_get_current_buf()
   versionspec = versionspec or s.default_version_spec or 'T'
 
-  M.tf_get_version_from_versionspec(path, versionspec, opts.force_fresh, function(temp_file_path)
+  u.tf_get_version_from_versionspec(path, versionspec, opts.force_fresh, function(temp_file_path)
     -- the bang (! flag) turns off diff-mode for all windows in the current context
     vim.cmd.diffoff({ bang = true })
     vim.cmd.diffsplit(temp_file_path)
@@ -58,6 +58,37 @@ function M.tf_compare(opts)
     if opts.no_split then vim.cmd ':norm q' end
     if opts.open_folds then vim.cmd ':norm zr' end
   end)
+end
+
+-- experimental, directly use diffsplit with custom buftype uri
+function M.tf_compare(opts)
+
+  local versionspec = opts.versionspec
+  local buf_id = opts.buf_id
+
+  if opts.no_split == nil then opts.no_split = vim.g.tf_no_split  end
+  if opts.open_folds == nil then opts.open_folds = vim.g.tf_open_folds end
+
+  local path = u.get_current_file('tf_compare', buf_id)
+  if not path then
+    return
+  end
+
+  versionspec = versionspec or s.default_version_spec or 'T'
+
+  -- the bang (! flag) turns off diff-mode for all windows in the current context
+  vim.cmd.diffoff({ bang = true })
+  vim.cmd.diffsplit('tfvc:///files/'..versionspec..'/'..path)
+
+  -- diffsplit sets the newly loaded file as the current buffer
+  local new_buf = vim.api.nvim_get_current_buf()
+  -- vim.api.nvim_set_option_value('modifiable', false, { buf = new_buf })
+
+  vim.b[new_buf].tf_versionspec = versionspec
+  vim.b[new_buf].tf_isServerFile = true
+
+  if opts.no_split then vim.cmd ':norm q' end
+  if opts.open_folds then vim.cmd ':norm zr' end
 end
 
 function M.toggle_diff()
@@ -75,59 +106,14 @@ function M.toggle_diff()
   end
 end
 
----@param path string path to the file to get the version from
----@param versionspec version_spec 
----@param force_fresh boolean? If true, the buffer will be reloaded from the server
----@param callback fun(temp_file_path : string) continuation callback
-function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callback)
-  versionspec = versionspec or s.default_version_spec
-
-  ---@type table<file_version>
-  local cache = s.file_versions or {}
-  if not force_fresh then
-    local tmp_file = s.get_cached_file_version(versionspec, path)
-    if tmp_file then
-      callback(tmp_file)
-      return
-    end
-  end
-
-  local temp = vim.fn.tempname()
-  local cmd = { 'vc', 'view', '/version:' .. versionspec, path, '/output:' .. temp }
-  u.tf_cmd(cmd, false, function(obj)
-    vim.schedule(function()
-      if obj.code == 0 then
-        if obj.stdout then
-          print(obj.stdout)
-        end
-        ---@type file_version
-        local cache_entry = {
-          version_spec = versionspec,
-          local_file = path,
-          server_file = temp
-        }
-
-        -- remove existing cache entry if any
-        for i, value in ipairs(cache) do
-          if value.local_file == cache_entry.local_file then
-            table.remove(cache, i)
-            break
-          end
-        end
-        table.insert(cache, cache_entry)
-        callback(temp)
-      end
-    end)
-  end)
-end
-
 ---@param files string[] list of file paths
 ---@param version_spec version_spec
 function M.preload_versions_for_files(files, version_spec, force_fresh)
   -- either get existing bufferId for create a new buffer for all files
   -- vim.print(vim.inspect(files))
+
   for _, file in pairs(files) do
-    M.tf_get_version_from_versionspec(file, version_spec, force_fresh, function(temp)
+    u.tf_get_version_from_versionspec(file, version_spec, force_fresh, function(temp)
       if s.debug then
         print('Preloaded Version ' .. version_spec ..  '  for ' .. file .. ': ' .. temp)
       end
@@ -135,21 +121,6 @@ function M.preload_versions_for_files(files, version_spec, force_fresh)
   end
 end
 
-function M.get_versionspec_from_user()
-  local prompt =
-[[Versionspec:
-    Date/Time         D"any .NET Framework-supported format"
-                      or any of the date formats of the local machine
-    Changeset number  Cnnnnnn
-    Label             Llabelname
-    Latest version    T
-    Workspace         Wworkspacename;workspaceowner
-
-VersionSpec > ]]
-
-  local spec = vim.fn.input { prompt = prompt, default = '', cancelreturn = s.default_version_spec }
-  return spec
-end
 
 local function cmd_from_verb(verb, pass_path, print_stdout, callback)
 
@@ -163,7 +134,7 @@ local function cmd_from_verb(verb, pass_path, print_stdout, callback)
     else
       args = { 'vc', verb }
     end
-    u.tf_cmd(args, print_stdout, callback)
+    u.tf_cmd2(args, { print_stdout = print_stdout } , callback)
   end
 end
 
@@ -210,7 +181,7 @@ M.subcommand_tbl = {
     default_mapping = 'l',
     run = function (opts)
       local args = opts.fargs or {}
-      local spec = s.default_version_spec or 'T'
+      local spec = nil
       if #args > 0 then
         spec = args[1]
       end
@@ -225,11 +196,6 @@ M.subcommand_tbl = {
       })
     end
   },
-  -- history = {
-  --   desc = 'List changesets for current buffer',
-  --   default_mapping = 'h',
-  --   run = function() require('tfvc.history').cmd_list_commits() end,
-  -- },
   openWebHistory = {
     desc = 'Open Web History for current File/Directory',
     default_mapping = 'w',
@@ -245,7 +211,7 @@ M.subcommand_tbl = {
     run = function (opts)
       local force_fresh = opts.bang
       local status = require('tfvc.status')
-      local version_spec = M.get_versionspec_from_user()
+      local version_spec = u.get_versionspec_from_user()
       status.do_with_pending_changes(force_fresh, function(pending_changes)
         vim.schedule(function()
           local local_paths = vim.tbl_map(function(pending_change)
@@ -278,7 +244,7 @@ M.subcommand_tbl = {
       })
       if not new_path or new_path == '' then return end
       local cmd = { 'rename', path, new_path}
-      u.tf_cmd(cmd, false, function (obj)
+      u.tf_cmd2(cmd, nil, function (obj)
         if obj.code == 0 then
           vim.schedule(function()
             vim.cmd.edit(new_path)
@@ -287,6 +253,16 @@ M.subcommand_tbl = {
       end)
     end,
   },
+  history = {
+    desc = 'Shows history of current file',
+    default_mapping = 'h',
+    complete = 'file',
+    run = function (opts)
+      local path = #opts.fargs > 0 and opts.fargs[1] or u.get_current_file('history') or '.'
+      local opening_cmd = vim.g.tf_history_open_cmd or 'e'
+      vim.cmd (opening_cmd .. ' tfvc:///history/'.. path)
+    end
+  }
 }
 
 local cmd_name = 'TF'
@@ -306,6 +282,7 @@ local function TF(opts)
   end
 end
 
+-- TODO: Fix state-management and option passing
 ---@param opts tfvc_opts?
 function M.setup(opts)
   local opts = vim.g.tf or {}
@@ -353,6 +330,9 @@ function M.setup(opts)
       end
     end,
   })
+
+  require 'tfvc.buftypes'
+
 end
 
 return M
