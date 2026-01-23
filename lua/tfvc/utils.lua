@@ -107,6 +107,8 @@ function M.tf_cmd(command, opts, callback)
       return
     end
 
+    -- we only need re-encode output streams
+    -- if there's a callback that could possibly make use that output
     if callback then
       local source_enc = s.user_vars.output_encoding
       if type(source_enc) == 'string' then
@@ -145,10 +147,19 @@ local schemeMappers = {
   ['oil:'] = function (buf, _)
     ---@diagnostic disable-next-line: return-type-mismatch
     return require('oil').get_current_dir(buf)
+  end,
+  ['tfvc:///files/'] = function (buf, _)
+    local p = vim.b[buf].local_path
+    if not type(p) == 'string' then
+      error('tfvc:///files buffer did not have local_path set', vim.log.levels.WARN)
+    end
+    return p
   end
 }
 
-function M.get_current_file(command, buf)
+---@param command string only used for logging when something goes wrong
+---@param buf number? vim buffer id
+function M.get_local_path(command, buf)
   buf = buf or vim.api.nvim_get_current_buf()
   local uri = vim.uri_from_bufnr(buf)
   for key, value in pairs(schemeMappers) do
@@ -193,12 +204,13 @@ end
 
 
 ---@param path string path to the file to get the version from
----@param versionspec version_spec 
+---@param versionspec versionspec?
 ---@param force_fresh boolean? If true, the buffer will be reloaded from the server
 ---@param callback fun(temp_file_path : string) continuation callback
 function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callback)
   local s = require 'tfvc.state'
-  versionspec = versionspec or s.user_vars.default_version_spec
+
+  versionspec = versionspec or s.user_vars.default_versionspec
 
   ---@type table<file_version>
   local cache = s.file_versions or {}
@@ -219,7 +231,7 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
       end
       ---@type file_version
       local cache_entry = {
-        version_spec = versionspec,
+        versionspec = versionspec,
         local_file = path,
         server_file = temp
       }
@@ -237,6 +249,17 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
   end))
 end
 
+-- usually called before doing another diff-split
+-- so we don't produce more splits than necessary
+-- only affects current tab
+function M.close_tfvc_diff_wins()
+  for _, value in pairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local buf_in_win = vim.api.nvim_win_get_buf(value)
+    if vim.b[buf_in_win].isServerFile then
+      vim.api.nvim_win_close(value, true)
+    end
+  end
+end
 
 function M.get_versionspec_from_user()
   local prompt =

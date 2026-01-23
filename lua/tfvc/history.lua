@@ -23,7 +23,7 @@ function M.cmd_open_web_history()
     vim.notify('Version control web url not initialized', vim.log.levels.ERROR)
     return
   end
-  local file = u.get_current_file('open_web_history')
+  local file = u.get_local_path('open_web_history')
   if not file then
     return
   end

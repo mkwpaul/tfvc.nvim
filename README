@@ -67,7 +67,7 @@ require('tfvc').setup()`
 
 - Default keybind: `<leader>tl` (diff with latest)
 Diffs the local version of the current file with a specific server version.
-The version_spec is passed directly to the `tf view command.`
+The versionspec is passed directly to the `tf view command.`
 
 Tip:
 To quickly review your pending changes bevor commiting, you can use :TF diff,

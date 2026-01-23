@@ -97,8 +97,8 @@ COMMANDS                                                        *tfvc.commands*
 
 - Default keybind: `<leader>tl` (diff with latest)
 Diffs the local version of the current file with a specific server version.
-Takes the |tfvc.version_spec| as an argument.
-The version_spec is passed directly to the `tf view command.
+Takes the |tfvc.versionspec| as an argument.
+The versionspec is passed directly to the `tf view command.
 
 To diff with the latest server version, run `:TF diff T` or just `:TF diff`. To
 diff with version of a specific changeset i.e CS12345 run `:TF diff C12345`. To
@@ -149,8 +149,8 @@ Default |TF-status| is equivalent to `:TFStatus in_cwd, cached`
 - Non-blocking equivalent to `:!tf undo "%"`
 
 VERSIONSPEC
-                                                            *tfvc.version_spec*
-The complete version_spec format is as follows:
+                                                             *tfvc.versionspec*
+The complete versionspec format is as follows:
    >
   (taken from the TF.exe help)
   Versionspec:                                                
