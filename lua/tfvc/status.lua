@@ -1,6 +1,5 @@
 local u = require('tfvc.utils')
 local xmlparser = require('tfvc.xmlparser')
-local s = require('tfvc.state')
 
 local M = {}
 
@@ -65,8 +64,8 @@ function M.get_pending_changes_async(callback)
       return
     end
     local changes = parse_status_xml(obj.stdout)
-    s.pending_changes = changes
-    s.pending_changes_last_updated = os.time()
+    u.pending_changes = changes
+    u.pending_changes_last_updated = os.time()
     callback(changes)
   end)
 end
@@ -74,7 +73,7 @@ end
 ---@param force_fresh boolean 
 ---@param callback fun(changes:pending_change[])
 function M.do_with_pending_changes(force_fresh, callback)
-  local pending_changes = s.pending_changes
+  local pending_changes = u.pending_changes
   if pending_changes == nil or force_fresh then
     M.get_pending_changes_async(callback)
   else
@@ -95,10 +94,8 @@ function M.change_type_to_icons(change)
   return table.concat(result, ' ')
 end
 
----@class pending_chagnes_opts
----@field fresh boolean 
----@field in_cwd boolean 
-
+---@param fresh boolean 
+---@param in_cwd boolean 
 function M.load_pending_changes_into_qf(fresh, in_cwd)
   M.do_with_pending_changes(fresh, function (pending_changes)
     vim.schedule(function()
@@ -126,7 +123,8 @@ end
 function M.parse_cmd_args(opts)
   local args = opts.fargs or {}
 
-  local in_cwd = s.user_vars.filter_status_by_cwd
+  local options = require('tfvc.options')
+  local in_cwd = options.filter_status_by_cwd
   if in_cwd == nil then in_cwd = true end
 
   local fresh = opts.bang

@@ -1,8 +1,17 @@
 local M = {}
 
+---@type table<file_version>
+M.file_versions = {}
+---@type table<pending_change>
+M.pending_changes = {}
+---@type number|nil
+M.pending_changes_last_updated = nil
+---@type workfold cached from output or user-provided
+M.workfold = nil
+
 ---@returns a generator that yields lines from a string
 ---@param str string
-function M.line_iter(str)
+local function line_iter(str)
   local lines = vim.split(str, '\n')
   local i = 0
   local iter = {
@@ -22,7 +31,7 @@ end
 
 ---@param str string
 ---@return string
-function M.trim(str)
+local function trim(str)
   if not str then
     return ''
   end
@@ -53,22 +62,13 @@ function M.is_within_workspace(full_path)
   return vim.startswith(full_path, cwd)
 end
 
---- Executes a command and calls the exit_callback when the command is finished.
--- ---@param exit_callback nil | fun(obj: vim.SystemCompleted)
--- ---@param space_separated string[]
--- ---@param print_stdout boolean
--- ---@deprecated use tf_cmd2 instead
--- function M.tf_cmd(space_separated, print_stdout, exit_callback)
---   local opts = { print_stdout = print_stdout }
---   M.tf_cmd2(space_separated, opts, exit_callback)
--- end
-
 ---@class tf_cmd_opts
 ---@field print_stdout boolean? should output be printed in messages?
 ---@field suppress_echo boolean? should command that was ran not be printed?
 ---@field return_stderr_on_failure boolean? should callback be called despite non-zero exit-code?
 ---@field debug boolean? print full trace 
 
+--- Executes a command and calls the exit_callback when the command is finished.
 ---@param command string[] arguments to pass to TF.exe
 ---@param opts tf_cmd_opts?
 ---@param callback fun(obj: vim.SystemCompleted)?
@@ -76,11 +76,11 @@ function M.tf_cmd(command, opts, callback)
 
   opts = opts or {}
 
-  local s = require('tfvc.state')
-  table.insert(command, 1, s.user_vars.executable_path)
+  local v = require 'tfvc.options'
+  table.insert(command, 1, v.executable_path)
   local command_string = table.concat(command, ' ')
   if not opts.suppress_echo then
-    print('cmd:' .. command_string)
+    print(command_string)
   end
 
   local _ = vim.system(command, nil, function(obj)
@@ -95,8 +95,8 @@ function M.tf_cmd(command, opts, callback)
       end
     end)
 
-    local state = require('tfvc.state')
-    if state.user_vars.debug then
+    local o = require('tfvc.options')
+    if o.debug then
       local log = 'Job finished: ' .. command_string .. '\n' .. 'Code:  ' .. obj.code .. '\n' .. obj.stderr .. obj.stdout
       vim.schedule(function()
         vim.notify(log, nil, nil)
@@ -110,7 +110,7 @@ function M.tf_cmd(command, opts, callback)
     -- we only need re-encode output streams
     -- if there's a callback that could possibly make use that output
     if callback then
-      local source_enc = s.user_vars.output_encoding
+      local source_enc = v.output_encoding
       if type(source_enc) == 'string' then
         local stdout = nil
         local stderr = nil
@@ -140,48 +140,43 @@ function M.file_uri_to_path(uri)
 end
 
 ---@type table<string, fun(buf: number, uri: string):string> dictionary of uri-schemes and functions that resolve a local path for given a buffer and uri with that scheme
-local schemeMappers = {
+M.schemeMappers = {
   ['file:'] = function(_, uri)
+    if uri == 'file://' then
+      error('Not a file-buffer', vim.log.levels.ERROR)
+    end
     return M.file_uri_to_path(uri)
+  end,
+  ['tfvc:///files/'] = function (buf, _)
+    local p = vim.b[buf].local_path
+    assert(type(p) == 'string', [[tfvc:///files buffer must have buffer-varialbe 'local_path' set]])
+    return p
   end,
   ['oil:'] = function (buf, _)
     ---@diagnostic disable-next-line: return-type-mismatch
     return require('oil').get_current_dir(buf)
   end,
-  ['tfvc:///files/'] = function (buf, _)
-    local p = vim.b[buf].local_path
-    if not type(p) == 'string' then
-      error('tfvc:///files buffer did not have local_path set', vim.log.levels.WARN)
-    end
-    return p
-  end
 }
 
 ---@param command string only used for logging when something goes wrong
----@param buf number? vim buffer id
+---@param buf number? vim buffer id, falls back to current buffer if not set
 function M.get_local_path(command, buf)
   buf = buf or vim.api.nvim_get_current_buf()
   local uri = vim.uri_from_bufnr(buf)
-  for key, value in pairs(schemeMappers) do
+  for key, value in pairs(M.schemeMappers) do
     if vim.startswith(uri, key) then
       return value(buf, uri);
     end
   end
-  print('Command ' .. command .. 'Invalid for non-file buffers: uri:' .. uri)
+  print('Command ' .. command .. 'Invalid for non-file buffers: uri: ' .. uri)
   return nil
 end
 
-local function char_to_hex(c)
-  return string.format("%%%02X", string.byte(c))
-end
-
-local function hex_to_char(x)
-  return string.char(tonumber(x, 16))
-end
+local function char_to_hex(c) return string.format("%%%02X", string.byte(c)) end
 
 ---@param url string?
 ---@return string?
-function M.url_encode(url)
+local function url_encode(url)
   if url == nil then
     return
   end
@@ -191,31 +186,31 @@ function M.url_encode(url)
   return url
 end
 
----@param url string?
----@return string?
-function M.url_decode(url)
-  if url == nil then
-    return
+---@param versionspec versionspec
+---@param file string
+---@return string|nil server_file or null
+local function get_cached_file_version(versionspec, file)
+  for _, value in pairs(M.file_versions or {}) do
+    if (value.versionspec == versionspec and file == value.local_file) then
+      return value.server_file
+    end
   end
-  url = url:gsub("+", " ")
-  url = url:gsub("%%(%x%x)", hex_to_char)
-  return url
+  return nil
 end
-
 
 ---@param path string path to the file to get the version from
 ---@param versionspec versionspec?
 ---@param force_fresh boolean? If true, the buffer will be reloaded from the server
 ---@param callback fun(temp_file_path : string) continuation callback
 function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callback)
-  local s = require 'tfvc.state'
 
-  versionspec = versionspec or s.user_vars.default_versionspec
+  versionspec = versionspec or require('tfvc.options').default_versionspec
 
   ---@type table<file_version>
-  local cache = s.file_versions or {}
+  local cache = M.file_versions or {}
   if not force_fresh then
-    local tmp_file = s.get_cached_file_version(versionspec, path)
+    ---@diagnostic disable-next-line: param-type-mismatch
+    local tmp_file = get_cached_file_version(versionspec, path)
     if tmp_file then
       callback(tmp_file)
       return
@@ -224,7 +219,7 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
 
   local temp = vim.fn.tempname()
   local cmd = { 'vc', 'view', '/version:' .. versionspec, path, '/output:' .. temp }
-  M.tf_cmd(cmd, nil, vim.schedule_wrap(function(obj)
+  M.tf_cmd(cmd, { suppress_echo = true }, vim.schedule_wrap(function(obj)
     if obj.code == 0 then
       if obj.stdout then
         print(obj.stdout)
@@ -249,32 +244,107 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
   end))
 end
 
+--[[
+$ tf workfold
+==============================================================================================
+Workspace : localMachine (tfs user)
+Collection: [url to server]
+ [TfsServerPath]: [MappedLocalPath]
+--]]
+---@param output string
+---@return workfold | nil
+local function parse_tf_workfold(output)
+  local workfold = {}
+  local iter = line_iter(output)
+
+  while iter.next() do
+    local line = iter.current()
+    if vim.startswith(line, 'Workspace :') then
+      workfold.workspace = trim(string.sub(line, 12))
+    end
+    if vim.startswith(line, 'Collection:') then
+      workfold.collection = trim(string.sub(line, 11))
+      -- line after collection is " [ServerPath]: [LocalPath]"
+      if iter.next() then
+        local line_2 = iter.current()
+        workfold.serverPath = trim(string.sub(line_2, 1, string.find(line_2, ':') - 1))
+        workfold.localPath = trim(string.sub(line_2, string.find(line_2, ':') + 2))
+        workfold.localPath = vim.fs.normalize(workfold.localPath)
+      end
+    end
+  end
+
+  if not workfold.serverPath
+    or not workfold.localPath
+    or not workfold.workspace then
+    return nil
+  end
+  return workfold
+end
+
+---@return workfold?
+function M.get_workfold_or_get_cached()
+
+  local workfold_from_user = require('tfvc.options').workfold
+  if workfold_from_user then return workfold_from_user end
+  if M.workfold then return M.workfold end
+
+  M.tf_cmd({ 'workfold' }, nil, function(obj)
+    if obj.code ~= 0 then
+      vim.schedule(function()
+        vim.notify('Failed to get workfold: ' .. vim.inspect(obj), vim.log.levels.ERROR)
+      end)
+      return
+    end
+
+    local workfold = parse_tf_workfold(obj.stdout)
+    if not workfold then
+      vim.schedule(function()
+        vim.notify('Failed to get workfold: ' .. vim.inspect(obj), vim.log.levels.ERROR)
+      end)
+      return
+    end
+    M.workfold = workfold
+  end)
+
+  return nil
+end
+
+function M.cmd_open_web_history()
+  local v = require 'tfvc.options'
+  local workfold = M.get_workfold_or_get_cached()
+  assert(workfold, 'Workfold must be initialized. Try Again.')
+  assert(v.version_control_web_url, [[User-Option 'version_control_web_url' must be set for command 'open web history']])
+  local file = M.get_local_path('open_web_history')
+  if not file then
+    return
+  end
+
+  local serverPath = file:gsub(workfold.localPath, workfold.serverPath)
+  local escapedServerPath = url_encode(serverPath) or ''
+  escapedServerPath = escapedServerPath:gsub('%%2E', '.')
+
+  local full_url = v.version_control_web_url .. '/?path=' .. escapedServerPath .. '&_a=history'
+  if v.debug then
+    vim.notify(full_url)
+  end
+  vim.ui.open(full_url)
+end
+
 -- usually called before doing another diff-split
 -- so we don't produce more splits than necessary
 -- only affects current tab
 function M.close_tfvc_diff_wins()
-  for _, value in pairs(vim.api.nvim_tabpage_list_wins(0)) do
-    local buf_in_win = vim.api.nvim_win_get_buf(value)
-    if vim.b[buf_in_win].isServerFile then
-      vim.api.nvim_win_close(value, true)
+  local cur_win = vim.api.nvim_get_current_win()
+  for _, win in pairs(vim.api.nvim_tabpage_list_wins(0)) do
+    local buf_in_win = vim.api.nvim_win_get_buf(win)
+    local is_server = vim.b[buf_in_win].is_server_file
+
+    --vim.api.nvim_get_option_value('diff', { win = win })
+    if win ~= cur_win and (is_server or vim.api.nvim_win_get_option(win, 'diff')) then
+      vim.api.nvim_win_close(win, true)
     end
   end
-end
-
-function M.get_versionspec_from_user()
-  local prompt =
-[[Versionspec:
-    Date/Time         D"any .NET Framework-supported format"
-                      or any of the date formats of the local machine
-    Changeset number  Cnnnnnn
-    Label             Llabelname
-    Latest version    T
-    Workspace         Wworkspacename;workspaceowner
-
-VersionSpec > ]]
-
-  local spec = vim.fn.input { prompt = prompt, default = '', cancelreturn = 'T' }
-  return spec
 end
 
 return M

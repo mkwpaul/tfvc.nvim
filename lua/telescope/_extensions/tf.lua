@@ -2,7 +2,7 @@ local telescope = require 'telescope'
 
 ---@param in_cwd boolean filter pending changes to only those within the current workspace
 ---@param pending_changes table<pending_change>
-local show_telescope_finder_impl = function(pending_changes, in_cwd, opts)
+local function show_telescope_finder_impl(pending_changes, in_cwd, opts)
   local finders = require "telescope.finders"
   local action = require "telescope.actions"
   local tl_state = require "telescope.actions.state"
@@ -17,7 +17,7 @@ local show_telescope_finder_impl = function(pending_changes, in_cwd, opts)
     end, pending_changes)
   end
 
-  local init_mappings = function(_, map)
+  local function init_mappings(_, map)
     map("i", "<CR>", action.file_edit)
     -- TODO get revert changes working
     map("i", "<C-u>", function(_)
@@ -33,7 +33,7 @@ local show_telescope_finder_impl = function(pending_changes, in_cwd, opts)
   end
 
   ---@param entry pending_change
-  local entry_maker = function(entry)
+  local function entry_maker(entry)
     local path = u.get_local_path_relative(entry.Local)
     local display = path .. " " .. tfvc_status.change_type_to_icons(entry.Change)
     return {
@@ -56,8 +56,6 @@ local show_telescope_finder_impl = function(pending_changes, in_cwd, opts)
   }
 
   local pickers = require "telescope.pickers"
-  local themes = require "telescope.themes"
-
   pickers.new(opts, def):find()
 end
 
@@ -73,8 +71,7 @@ local function cmd_show_telescope_finder(opts)
 end
 
 return telescope.register_extension({
-  setup = function (_, _)
-  end,
+  setup = function (_, _) end,
   exports = {
     tf_status = cmd_show_telescope_finder,
   },
