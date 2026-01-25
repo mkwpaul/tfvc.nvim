@@ -139,27 +139,28 @@ function M.file_uri_to_path(uri)
   return path
 end
 
----@type table<string, fun(buf: number, uri: string):string> dictionary of uri-schemes and functions that resolve a local path for given a buffer and uri with that scheme
+---@type table<string, fun(buf: number, uri: string):string, string> dictionary of uri-schemes and functions that resolve a local path for given a buffer and uri with that scheme
 M.schemeMappers = {
   ['file:'] = function(_, uri)
     if uri == 'file://' then
       error('Not a file-buffer', vim.log.levels.ERROR)
     end
-    return M.file_uri_to_path(uri)
+    return M.file_uri_to_path(uri), 'file'
   end,
   ['tfvc:///files/'] = function (buf, _)
     local p = vim.b[buf].local_path
     assert(type(p) == 'string', [[tfvc:///files buffer must have buffer-varialbe 'local_path' set]])
-    return p
+    return p, 'file'
   end,
   ['oil:'] = function (buf, _)
     ---@diagnostic disable-next-line: return-type-mismatch
-    return require('oil').get_current_dir(buf)
+    return require('oil').get_current_dir(buf), 'directory'
   end,
 }
 
 ---@param command string only used for logging when something goes wrong
 ---@param buf number? vim buffer id, falls back to current buffer if not set
+---@return  string?, string? local_path and 'file' or 'directory'
 function M.get_local_path(command, buf)
   buf = buf or vim.api.nvim_get_current_buf()
   local uri = vim.uri_from_bufnr(buf)
@@ -169,7 +170,7 @@ function M.get_local_path(command, buf)
     end
   end
   print('Command ' .. command .. 'Invalid for non-file buffers: uri: ' .. uri)
-  return nil
+  return nil, nil
 end
 
 local function char_to_hex(c) return string.format("%%%02X", string.byte(c)) end

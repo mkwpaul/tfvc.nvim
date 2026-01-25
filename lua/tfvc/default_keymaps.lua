@@ -11,17 +11,14 @@ M.mappings = {
   { key = '<leader>ts', cmd = '<cmd>TF status<CR>', desc = 'Load Status (Pending Changes) into quickfix list', },
   { key = '<leader>tr', cmd = '<cmd>TF rename<CR>', desc = 'Renames/Moves file or directory', },
   { key = '<leader>th', cmd = '<cmd>TF history<CR>', desc = 'Shows history of current file in interactive buffer', },
-  { key = '<C-A-j>', cmd =  '<cmd>cnext<CR><cmd>TF diff<CR><CR>' },
-  { key = '<C-A-k>', cmd =  '<cmd>cprev<CR><cmd>TF diff<CR><CR>' },
-  { key = '<C-A-l>', cmd =  toggle_diff , {} },
-  -- { key = '<C-S-j>', cmd =  '<cmd>cnext<CR><cmd>TF diff<CR><CR>' },
-  -- { key = '<C-S-k>', cmd =  '<cmd>cprev<CR><cmd>TF diff<CR><CR>' },
-  -- { key = '<C-S-l>', cmd =  toggle_diff, {} },
+  { key = '<C-A-j>', cmd =  '<cmd>cnext<CR><cmd>TF diff<CR><CR>', desc = 'Diff next file in quickfix list' },
+  { key = '<C-A-k>', cmd =  '<cmd>cprev<CR><cmd>TF diff<CR><CR>', desc = 'Diff previous file in quickfix list' },
+  { key = '<C-A-l>', cmd =  toggle_diff , desc = 'Toggle diff view' },
 }
 
 if not vim.g.tf_disable_default_keymaps then
   for _, mapping in pairs(M.mappings) do
-    vim.keymap.set('n', mapping.key, mapping.cmd, { desc = mapping.desc })
+    vim.keymap.set('n', mapping.key, mapping.cmd, { desc = 'TFVC: ' .. mapping.desc })
   end
 end
 

@@ -1,6 +1,6 @@
 ---@class tfvc_user_vars class defining all recognized variables that control behavior of this plugin
 ---@field debug boolean? verbose output for debugging
----@field default_versionspec versionspec? versionspec to use when no version_spec is specified
+---@field default_versionspec versionspec? versionspec to use with commands when no version_spec is specified, defaults to 'T' which indicates to use the latest version
 ---@field diff_no_split? boolean if true, then hide the buffer that is compared against, when using tf diff
 ---@field diff_open_folds? boolean if true, then don't collapse regions without changes, when using tf diff
 ---@field executable_path string? Full path to the TF executable. If not set, the it will be assumed that the tf executable is in the PATH
@@ -8,11 +8,10 @@
 ---@field history_entry_limit number? number of entries to load in history buffers
 ---@field history_open_cmd? string command to use when navigating to tfvc:/// paths via commands, should be one of edit, split, vsplit etc. 
 ---@field output_encoding string? if specified, use iconv to convert output from tf.exe from the specified encoding to utf-8, value is passed as-is to iconv, so it should be an encoding
----@field project_url string should look something like 'https://dev.azure.com/{organization}/{project}/' or 'http://zesrvtfs:8080/tfs/{collection}/{project}'
 ---@field version_control_web_url string this should look something like 'http://{host}/tfs/{collection}/{project}/_versionControl'
 ---@field workfold? workfold the default workfold to use. See $tf vc help workfold 
 
-local user_vars_defs = {
+local variables = {
   debug = { fallback = false, },
   default_versionspec = { fallback = 'T', },
   diff_no_split = { fallback = false, },
@@ -22,7 +21,6 @@ local user_vars_defs = {
   history_entry_limit = { fallback = 300, },
   history_open_cmd = { fallback = 'e', },
   output_encoding = { fallback = nil, },
-  project_url = { fallback = nil, },
   version_control_web_url = { fallback = nil, },
   workfold = { fallback = nil, },
 }
@@ -65,7 +63,7 @@ local M = {}
 
 setmetatable(M, {
   __index = function (_, k)
-    local var = user_vars_defs[k]
+    local var = variables[k]
     assert(var, vim.inspect(k) .. " is invalid key for user-vers")
 
     -- direct global tf_[key] have precedence over
