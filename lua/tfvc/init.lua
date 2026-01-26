@@ -184,8 +184,8 @@ M.commands = {
 --- doesn't initialize this plugin; only sets options
 ---@param opts tfvc_user_vars
 function M.setup(opts)
-  local tf = vim.g.tf or {}
-  vim.g.tf = vim.tbl_deep_extend('force', tf, opts)
+  local tfvc = vim.g.tfvc or {}
+  vim.g.tfvc = vim.tbl_deep_extend('force', tfvc, opts)
 end
 
 return M

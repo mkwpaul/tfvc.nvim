@@ -28,7 +28,7 @@ local variables = {
 --[[
 This proxy-object provides unified access to user-variables controlling the
 behavior of this plugin. Instead of accessing various variables on vim.g all
-over the code, or fields on a vim.g.tf object, or retrieving options from some
+over the code, or fields on a vim.g.tfvc object, or retrieving options from some
 other lua table filled via some setup() call or other API,...insetad of that,
 we just always use this proxy-object. That way, the way the user specified the
 variable is decoupled from how we access it.
@@ -45,13 +45,13 @@ and callsites don't have to know about fallbacks and can just assume that
 they have a valid value when they access the variable, provided that variable has a fallback.
 
 Current precedence (from highest to lowest) is:
-1. Individual field on vim.g prefixed with 'tf_'
+1. Individual field on vim.g prefixed with 'tfvc_'
    Highest so it's easier to set variables interactively
-   by executing ':let g:tf_default_versionspec = .....' for example
-2. field on vim.g.tf table (like vim.g.tf.default_versionspec = 'T')
+   by executing ':let g:tfvc_default_versionspec = .....' for example
+2. field on vim.g.tf table (like vim.g.tfvc.default_versionspec = 'T')
 2. values passed to setup()
 
-Note that the table passed to require('tfvc').setup is just merged into vim.g.tf
+Note that the table passed to require('tfvc').setup is just merged into vim.g.tfvc
 so precedence depends on what value was set last.
 ]]
 
@@ -66,17 +66,17 @@ setmetatable(M, {
     local var = variables[k]
     assert(var, vim.inspect(k) .. " is invalid key for user-vers")
 
-    -- direct global tf_[key] have precedence over
-    -- values on the vim.g.tf object
-    -- so that stuff can be more easily overwritten with :let g:tf_
+    -- direct global tfvc_[key] have precedence over
+    -- values on the vim.g.tfvc object
+    -- so that stuff can be more easily overwritten with :let g:tfvc_
     local value = nil
-    value = vim.g['tf_'..k]
+    value = vim.g['tfvc_'..k]
 
     if value ~= nil then
       return value
     end
 
-    local tfObj = vim.g.tf
+    local tfObj = vim.g.tfvc
     if tfObj then
       value = tfObj[k]
       if value ~= nil then

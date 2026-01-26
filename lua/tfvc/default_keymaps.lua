@@ -16,7 +16,7 @@ M.mappings = {
   { key = '<C-A-l>', cmd =  toggle_diff , desc = 'Toggle diff view' },
 }
 
-if not vim.g.tf_disable_default_keymaps then
+if not vim.g.tfvc_disable_default_keymaps then
   for _, mapping in pairs(M.mappings) do
     vim.keymap.set('n', mapping.key, mapping.cmd, { desc = 'TFVC: ' .. mapping.desc })
   end
