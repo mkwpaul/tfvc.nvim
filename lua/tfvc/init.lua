@@ -98,12 +98,34 @@ M.commands = {
   checkout = {
     desc = 'Checkout file for editing. Deliberately does not work with directories.',
     complete = true,
-    run = cmd_from_verb('checkout', false, function ()
-      vim.schedule(function() vim.cmd 'set noreadonly' end)
-    end)
+    run = cmd_from_verb('checkout', false, vim.schedule_wrap(function ()
+      vim.cmd 'set noreadonly'
+    end))
+  },
+  checkoutModfiedFiles = {
+    desc = 'Checkout all files that 1. are readonly (assumed to be not-checked-out) and 2. have unsaved changes',
+    run = function ()
+      local bufs = vim.api.nvim_list_bufs()
+      local bufs2 = vim.tbl_filter(function (value)
+        local isModified = vim.api.nvim_get_option_value('modified', { buf = value })
+        local isreadonly = vim.api.nvim_get_option_value('readonly', { buf = value })
+        return isModified == true and isreadonly == true
+      end, bufs)
+      local u = require'tfvc.utils'
+      local paths = vim.tbl_map(function (value) return u.get_local_path(nil, value) end, bufs2)
+      if #paths > 0 then
+        local command = vim.tbl_filter(function (value) return value ~= nil end, paths)
+        table.insert(command, 1, 'checkout');
+        u.tf_cmd(command, { print_stdout = true }, vim.schedule(function()
+          for _, value in ipairs(bufs) do
+            vim.api.nvim_set_option_value('readonly', false, { buf = value })
+          end
+        end))
+      end
+    end
   },
   showKeybinds = {
-    desc = '',
+    desc = 'Shows default keybinds.... :)',
     run = function () vim.print(vim.inspect(require('tfvc.default_keymaps').mappings)) end,
   },
   diff = {

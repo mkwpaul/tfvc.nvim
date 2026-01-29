@@ -156,6 +156,20 @@ Check out the current file from TFS.
 Non-blocking equivalent to `:!tf checkout "%"`
 Does not work with directories (for safety).
 
+- `:TF checkoutModfiedFiles`
+
+Checkout all files that 
+    1. are readonly (assumed to be not-checked-out)
+    2. have unsaved changes.
+
+This Command is provided for the case when you're modifying a larger amount of
+files programmatically; Through macros, through language-server renames or
+other means.
+
+In those situations this command lets checkout affected files out after the
+fact, letting you do `:wall` without having to rely on TF reconcile which could
+potentially add additional files you didn't mean to checkout/add.
+
 - `:TF diff`
 
 Diffs the local version of the current file with a specific server version.
@@ -259,18 +273,29 @@ The versionspec format is as follows (taken from the TF.exe help):
 # Questions & Answers
 
 - `How do I check in changes`?
+
 Run `tf checkin` outside of nvim.
 It will open a gui-tool. It has usable keyboard navigation and you need to use
 it if you want to associate a specfic work item with your changeset as you
 check in, as far as I can tell.
 
 - `How to I get the latest changes from the tfvc server?`
+
 Run `tf get . /recursive /noprompt` outside of nvim.
 if you have conflicts you can run `tf resolve /noprompt /auto:[strat]
 to resolve them.
 
-- `How do I reload a serverFile or history buffer`
+- `How do I reload a serverFile or history buffer if it failed to load`
+
 The same way you reload local files. With `:e!`
 
+- `How do I clear untracked changes in my working copy?`
+
+Run `tf reconcile . /clean /recursive /noprompt`.
+
+You can add the `/preview` flag to preview what it would delete without
+actually running it.
+
 - `How do I use nvim to resolve merge conflicts?`
+
 I don't know. You tell me, when you figure it out.

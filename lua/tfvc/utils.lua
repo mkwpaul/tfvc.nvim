@@ -15,9 +15,7 @@ local function line_iter(str)
   local lines = vim.split(str, '\n')
   local i = 0
   local iter = {
-    current = function()
-      return lines[i]
-    end,
+    current = function() return lines[i] end,
     next = function()
       i = i + 1
       if i <= #lines then
@@ -158,7 +156,7 @@ M.schemeMappers = {
   end,
 }
 
----@param command string only used for logging when something goes wrong
+---@param command string? only used for logging when something goes wrong
 ---@param buf number? vim buffer id, falls back to current buffer if not set
 ---@return  string?, string? local_path and 'file' or 'directory'
 function M.get_local_path(command, buf)
@@ -169,7 +167,9 @@ function M.get_local_path(command, buf)
       return value(buf, uri);
     end
   end
-  print('Command ' .. command .. 'Invalid for non-file buffers: uri: ' .. uri)
+  if command then
+    print('Command ' .. command .. 'Invalid for non-file buffers: uri: ' .. uri)
+  end
   return nil, nil
 end
 
@@ -257,7 +257,6 @@ Collection: [url to server]
 local function parse_tf_workfold(output)
   local workfold = {}
   local iter = line_iter(output)
-
   while iter.next() do
     local line = iter.current()
     if vim.startswith(line, 'Workspace :') then

@@ -81,7 +81,8 @@ function M.history_callback(args)
     table.insert(lines, 5, "#  n:  'gx': Open link to changeset in browser")
     if fsinfo.type == 'file' then
       table.insert(lines, 6, "#  n:  'gf': View version")
-      table.insert(lines, 7, "#  v:  'd':  Compare versions based on the start, and end of the visual selection ")
+      table.insert(lines, 7, "#  n:  'dl': Compare version with local file")
+      table.insert(lines, 8, "#  v:  'd':  Compare versions based on the start, and end of the visual selection ")
     end
 
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
@@ -114,8 +115,20 @@ function M.history_callback(args)
         end
         require('tfvc.utils').close_tfvc_diff_wins()
         vim.cmd.diffoff({ bang = true })
-        vim.cmd('e tfvc:///files/C' .. cs_start .. '/' .. path)
+        vim.cmd.edit('tfvc:///files/C' .. cs_start .. '/' .. path)
         vim.cmd.diffsplit('tfvc:///files/C' .. cs_end .. '/' .. path)
+      end, keymapOpt)
+      vim.keymap.set('n', 'dl', function ()
+
+
+        local cs = history_buf__get_changeset_from_line(buf)
+        if not cs then
+          return
+        end
+        require('tfvc.utils').close_tfvc_diff_wins()
+        vim.cmd.diffoff({ bang = true })
+        vim.cmd.edit(path)
+        vim.cmd.diffsplit('tfvc:///files/C' .. cs .. '/' .. path)
       end, keymapOpt)
     end
 
