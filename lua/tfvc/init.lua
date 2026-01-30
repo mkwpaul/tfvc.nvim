@@ -79,7 +79,7 @@ M.commands = {
   },
   showKeybinds = {
     desc = 'Shows default keybinds.... :)',
-    run = function () vim.print(vim.inspect(require('tfvc.default_keymaps').mappings)) end,
+    run = function () vim.cmd [[:help tfvc-keybinds]] end,
   },
   diff = {
     desc = 'Compare local file to latest server version',
