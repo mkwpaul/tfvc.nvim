@@ -1,9 +1,12 @@
+tfvc-changeset-buffer-keymaps	tfvc.txt	/*tfvc-changeset-buffer-keymaps*
 tfvc-commands	tfvc.txt	/*tfvc-commands*
+tfvc-history-buffer-keymaps	tfvc.txt	/*tfvc-history-buffer-keymaps*
 tfvc-installation-&-setup	tfvc.txt	/*tfvc-installation-&-setup*
 tfvc-keybinds	tfvc.txt	/*tfvc-keybinds*
 tfvc-options	tfvc.txt	/*tfvc-options*
 tfvc-questions-&-answers	tfvc.txt	/*tfvc-questions-&-answers*
 tfvc-requirements	tfvc.txt	/*tfvc-requirements*
+tfvc-source-control-buffers	tfvc.txt	/*tfvc-source-control-buffers*
 tfvc-table-of-contents	tfvc.txt	/*tfvc-table-of-contents*
 tfvc-tfvc.nvim	tfvc.txt	/*tfvc-tfvc.nvim*
 tfvc-versionspec	tfvc.txt	/*tfvc-versionspec*

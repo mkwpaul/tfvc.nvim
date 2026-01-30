@@ -11,7 +11,7 @@ end
 --- when called during visual mode, returns both the changeset numbers of the ends of the selection
 --- returns nil (or nil, nil) if the corresponding line has no changeset number
 ---@param buf number
-local function history_buf__get_changeset_from_line(buf)
+local function history___get_changeset_from_line(buf)
   local mode = vim.api.nvim_get_mode().mode
   if mode == 'v' or mode == 'V' then
 
@@ -44,6 +44,26 @@ local function history_buf__get_changeset_from_line(buf)
   end
 end
 
+local function diff_files(left, right)
+  local u = require 'tfvc.utils'
+  local vars = require 'tfvc.options'
+
+  -- close wins that we previously opened
+  -- otherwise new splits will acculumate when going throuhg multiple files
+  -- which the user would have to close manually
+  u.close_tfvc_diff_wins()
+  vim.cmd.diffoff({ bang = true })
+  vim.cmd ('keepjumps ' .. vars.diff_open_cmd ..  ' ' .. right)
+  vim.cmd ('keepjumps diffsplit ' .. left)
+
+  if vars.diff_no_split then vim.cmd ':norm q' end
+  if vars.diff_open_folds then vim.cmd ':norm zr' end
+  -- note that diff_open_folds has additional logic
+  -- where the cursor is moved to the first change
+  -- this is handeld in the tfvc:///files callback
+end
+
+--- options for calling tf.exe 
 ---@type tf_cmd_opts
 local tfcmdOpts = {
   suppress_echo = true,
@@ -61,7 +81,6 @@ function M.history_callback(args)
   vim.api.nvim_set_option_value('swapfile', false, bufOpt)
 
   local vars = require('tfvc.options')
-
   local path = args.file:gsub('tfvc:///history/', '') or '.'
   local limit = vars.history_entry_limit
   local cmd = { 'history',  path, '/recursive', '/noprompt', '/stopafter:'..limit, '/format:brief' }
@@ -70,82 +89,73 @@ function M.history_callback(args)
     -- Replace buffer content with command output
     vim.api.nvim_set_option_value('filetype', 'tf_history', bufOpt)
     vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
-    local output = obj.stdout or obj.stderr
-    local lines = vim.split(output, '\r\n')
-    local fsinfo =  vim.uv.fs_stat(path)
+    local fsinfo =  vim.uv.fs_stat(path) or { type = 'unknown' }
 
-    table.insert(lines, 1, '# History (' .. fsinfo.type ..')')
-    table.insert(lines, 2, '# Local-Path: ' .. path)
-    table.insert(lines, 3, "# Keymaps:")
-    table.insert(lines, 4, "#  n:  'gd': View changeset")
-    table.insert(lines, 5, "#  n:  'gx': Open link to changeset in browser")
-    if fsinfo.type == 'file' then
-      table.insert(lines, 6, "#  n:  'gf': View version")
-      table.insert(lines, 7, "#  n:  'dl': Compare version with local file")
-      table.insert(lines, 8, "#  v:  'd':  Compare versions based on the start, and end of the visual selection ")
-    end
+    local buffer_contents = {
+      '# TFVC-History (' .. fsinfo.type ..')',
+      '# Local-Path: ' .. path,
+      "# Help: g?",
+    }
 
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    local preamble_length = #buffer_contents
+    local lines = vim.split(obj.stdout or obj.stderr, '\r\n')
+    vim.list_extend(buffer_contents, lines)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, buffer_contents)
     vim.api.nvim_set_option_value('modifiable', false, bufOpt)
     vim.api.nvim_set_option_value('modified', false, bufOpt)
 
-    -- keymaps
-    local function open_cs()
-      local cs_number = history_buf__get_changeset_from_line(buf)
-      if cs_number then
-        vim.cmd('e tfvc:///changeset/'..cs_number )
+    -- move cursor to first changed file
+    vim.api.nvim_buf_call(buf, function()
+      local goto_content = ':' .. (preamble_length + 3) -- 3 lines of tf.exe output header
+      vim.cmd(goto_content)
+    end)
+
+    -----------
+    --- keymaps
+
+    ---@param cb fun(cs1:string,cs2:string?)
+    ---@return fun() function
+    local function with_cs_do(cb)
+      return function ()
+        local cs1, cs2 = history___get_changeset_from_line(buf)
+        if cs1 then cb(cs1, cs2) end
       end
     end
+    local open_cs = with_cs_do(function (cs1)
+      vim.cmd('e tfvc:///changeset/'..cs1)
+    end)
+    local view_cs_file_version = with_cs_do(function (cs1)
+      vim.cmd('e tfvc:///files/C' .. cs1 .. '/' .. path)
+    end)
+    local comp_via_visual = with_cs_do(function (cs1, cs2)
+      diff_files(
+       'tfvc:///files/C' .. cs1 .. '/' .. path,
+       'tfvc:///files/C' .. cs2 .. '/' .. path)
+    end)
+    local compare_with_local = with_cs_do(function (cs1)
+      diff_files(
+        'tfvc:///files/C' .. cs1 .. '/' .. path,
+        path)
+    end)
+    local open_cs_in_web = with_cs_do(function (cs1)
+      vim.ui.open(get_changeset_web_url(cs1));
+    end)
 
     local keymapOpt = { buffer = buf }
-
-    if fsinfo.type == 'file' then
-
-      vim.keymap.set('n', 'gf', function ()
-        local cs_number = history_buf__get_changeset_from_line(buf)
-        if cs_number then
-          vim.cmd('e tfvc:///files/C' .. cs_number .. '/' .. path)
-        end
-      end, keymapOpt)
-
-      vim.keymap.set('v', 'd', function ()
-        local cs_start, cs_end = history_buf__get_changeset_from_line(buf)
-        if not cs_start or not cs_end then
-          return
-        end
-        require('tfvc.utils').close_tfvc_diff_wins()
-        vim.cmd.diffoff({ bang = true })
-        vim.cmd.edit('tfvc:///files/C' .. cs_start .. '/' .. path)
-        vim.cmd.diffsplit('tfvc:///files/C' .. cs_end .. '/' .. path)
-      end, keymapOpt)
-      vim.keymap.set('n', 'dl', function ()
-
-
-        local cs = history_buf__get_changeset_from_line(buf)
-        if not cs then
-          return
-        end
-        require('tfvc.utils').close_tfvc_diff_wins()
-        vim.cmd.diffoff({ bang = true })
-        vim.cmd.edit(path)
-        vim.cmd.diffsplit('tfvc:///files/C' .. cs .. '/' .. path)
-      end, keymapOpt)
-    end
-
+    vim.keymap.set('n', 'g?', '<cmd>help tfvc-history-buffer-keymaps<CR>' , keymapOpt)
+    vim.keymap.set('n', 'gx', open_cs_in_web, keymapOpt)
+    vim.keymap.set('n', 'dd', open_cs, keymapOpt)
     vim.keymap.set('n', '<CR>', open_cs, keymapOpt)
-    vim.keymap.set('n', 'gd', open_cs, keymapOpt)
-    vim.keymap.set('n', 'gx', function ()
-      local line = vim.api.nvim_get_current_line()
-      local cs_number = line:gmatch('%d+')()
-      if cs_number then
-        vim.ui.open(get_changeset_web_url(cs_number));
-      end
-    end, keymapOpt)
+    if fsinfo.type == 'file' then
+      vim.keymap.set('n', 'gf', view_cs_file_version, keymapOpt)
+      vim.keymap.set('n', 'dl', compare_with_local, keymapOpt)
+      vim.keymap.set('v', 'dd', comp_via_visual, keymapOpt)
+      vim.keymap.set('v', '<CR>', comp_via_visual, keymapOpt)
+    end
   end))
 end
 
--- basically the same as above, only we call a different tf command + no custom keymap
-function M.changeset_callback (args)
+function M.changeset_callback(args)
   local buf = args.buf
   local bufOpt = { buf = buf }
 
@@ -162,13 +172,68 @@ function M.changeset_callback (args)
     -- Replace buffer content with command output
     vim.api.nvim_set_option_value('filetype', 'tf_changeset', bufOpt)
     vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
-    local output = obj.stdout or obj.stderr
-    local lines = vim.split(output, '\r\n')
-    local header = get_changeset_web_url(cs)
-    table.insert(lines, 1, header);
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+
+    local buffer_content = {
+      '# TFVC-Changeset: ' .. cs,
+      '# Web-Url: ' .. get_changeset_web_url(cs),
+      '# Help: g?',
+    }
+
+    local lines = vim.split(obj.stdout or obj.stderr, '\r\n')
+    table.remove(lines, 1) -- remove first line "Changeset: 144139" we already have a line like that in our header
+    vim.list_extend(buffer_content, lines)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, buffer_content)
     vim.api.nvim_set_option_value('modifiable', false, bufOpt)
     vim.api.nvim_set_option_value('modified', false, bufOpt)
+
+    -- move cursor to first changed file
+    vim.api.nvim_buf_call(buf, function()
+      vim.cmd '/\\$'
+      vim.cmd.nohlsearch()
+    end)
+
+    -----------
+    --- keymaps
+
+    ---@param cb fun(path:string)
+    local function with_path_do(cb)
+      return function ()
+        local line = vim.api.nvim_get_current_line()
+        local path, sub_count = line:gsub('.* %$', '$')
+        if sub_count ~= 1 then return end
+        path = u.server_path_to_local_path(path, true)
+        if path then
+          cb(path)
+        end
+      end
+    end
+    local compare_with_previous = with_path_do(function(path)
+      diff_files(
+        'tfvc:///files/C' .. tonumber(cs) - 1 .. '/' .. path,
+        'tfvc:///files/C' .. cs .. '/' .. path)
+    end)
+    local compare_with_latest = with_path_do(function(path)
+      diff_files(
+        'tfvc:///files/C' .. cs .. '/' .. path,
+        'tfvc:///files/T/' .. path)
+    end)
+    local compare_with_local = with_path_do(function(path)
+      diff_files(
+        'tfvc:///files/C' .. cs .. '/' .. path,
+        path)
+    end)
+    local view_file_version = with_path_do(function(path)
+      vim.cmd('e tfvc:///files/C' .. cs .. '/' .. path)
+    end)
+
+    ---@type vim.keymap.set.Opts
+    local keymapOpt = { buffer = buf }
+    vim.keymap.set('n', 'g?', '<cmd>help tfvc-changeset-buffer-keymaps<CR>' , keymapOpt)
+    vim.keymap.set('n', 'gf', view_file_version, keymapOpt)
+    vim.keymap.set('n', 'dl', compare_with_local, keymapOpt)
+    vim.keymap.set('n', 'dt', compare_with_latest, keymapOpt)
+    vim.keymap.set('n', 'dd', compare_with_previous, keymapOpt)
+    vim.keymap.set('n', '<CR>', compare_with_previous, keymapOpt)
   end))
 end
 
@@ -191,20 +256,34 @@ function M.files_callback(args)
   local u = require 'tfvc.utils'
   local fresh = vim.v.cmdbang == 1
   u.tf_get_version_from_versionspec(path, versionspec, fresh, function (file_path)
-    -- local lines = vim.fn.readfile(file_path)
-    -- vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.api.nvim_buf_call(buf, function()
       vim.cmd('noautocmd keepalt keepjumps silent read ++edit ' .. vim.fn.fnameescape(file_path))
       vim.api.nvim_buf_set_lines(buf, 0, 1, true, {}); -- replace first line with no lines (i.e. delete first line)
-    end)
-    -- must detect filetype before setting filetype
-    vim.cmd [[ filetype detect ]]
-    vim.api.nvim_set_option_value('modified', false, bufOpt)
-    vim.api.nvim_set_option_value('modifiable', false, bufOpt)
 
-    vim.b[buf].versionspec = versionspec
-    vim.b[buf].local_path = path
-    vim.b[buf].is_server_file = true
+      vim.b[buf].versionspec = versionspec
+      vim.b[buf].local_path = path
+      vim.b[buf].is_server_file = true
+
+      -- if we're opening this file as part of a file-diff
+      -- and we're not collapsing unchaged regions (diff_open_folds)
+      -- then per default we'd just be at line 1, instead of viewing the changes
+      -- so we're moving to the first change with ]c
+      --
+      -- not sure if this is the right place for this logic,
+      -- but we can only move the cursor after the file is fully loaded
+      -- maybe we'll need a custom event
+      local isdiff = vim.api.nvim_get_option_value( 'diff', { win = 0 })
+      if isdiff and require('tfvc.options').diff_open_folds then
+        vim.schedule(function ()
+          vim.cmd ':norm ]c'
+        end)
+      end
+
+      -- must detect filetype before setting filetype
+      vim.cmd [[ filetype detect ]]
+      vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+      vim.api.nvim_set_option_value('modified', false, bufOpt)
+    end)
   end)
 end
 

@@ -3,9 +3,9 @@
 tfvc.nvim is an unofficial plugin for integration of TeamFoundation verion
 control, also known as TFS, referred to as 'tfvc' from here on.
 
-It provides commands to checkout files, undo changes, view history, compare
-pending changes and other things.
-Some commands of the TF cli tool do not -and will not- have dedicated commands though.
+It provides commands to checkout files, undo changes, view history, view
+changesets, compare pending changes and other things. Some commands of the TF
+cli tool do not -and will not- have dedicated commands though.
 
 The goal is to optimize the workflow around working with a tfvc repository using nvim.
 Not to replace the commandline tool.
@@ -268,6 +268,40 @@ The versionspec format is as follows (taken from the TF.exe help):
     Label             Llabelname
     Latest version    T
     Workspace         Wworkspacename;workspaceowner
+```
+# Source Control buffers
+
+tfvc.nvim provides custom buffers for viewing directory- and file-history and
+changesets.
+
+These buffers define a handful of keymaps for navigation and diff operations.
+Unlike the default keybinds for normal commands, there is currently no way to
+disable or remap these keybinds.
+
+Note that viewing diffs may fail, if one version of a file does not exist
+because it has been renamed or deleted.
+
+### History Buffer Keymaps
+```
+<CR>  Open the changeset of the current line
+dd    Open the changeset of the current line
+gx    Open the changeset in the webclient
+
+# the following are only availible in file-histories, not directory-histories
+gf    Open the changset-version of file
+dl    Compare changset-version of file with the local version of the file
+
+<CR>  (visual mode keymap) Compare versions based on the start, and end of the visual selection 
+dd    (visual mode keymap) Compare versions based on the start, and end of the visual selection 
+```
+
+### Changeset Buffer Keymaps
+```
+<CR>  Compare changed file with previous version
+dd    Compare changed file with previous version
+dl    Compare changed file with local version
+dt    Compare changed file with latest server version
+gf    View file version
 ```
 
 # Questions & Answers

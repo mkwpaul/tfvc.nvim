@@ -3,13 +3,14 @@
 ---@field default_versionspec versionspec? versionspec to use with commands when no version_spec is specified, defaults to 'T' which indicates to use the latest version
 ---@field diff_no_split? boolean if true, then hide the buffer that is compared against, when using tf diff
 ---@field diff_open_folds? boolean if true, then don't collapse regions without changes, when using tf diff
----@field executable_path string? Full path to the TF executable. If not set, the it will be assumed that the tf executable is in the PATH
 ---@field filter_status_by_cwd boolean? When using tf status, only show changed files under the current working directory
+---@field executable_path string? Full path to the TF executable. If not set, the it will be assumed that the tf executable is in the PATH
 ---@field history_entry_limit number? number of entries to load in history buffers
----@field history_open_cmd? string command to use when navigating to tfvc:/// paths via commands, should be one of edit, split, vsplit etc. 
+---@field history_open_cmd? string command to use when navigating to tfvc:/// paths via commands, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
 ---@field output_encoding string? if specified, use iconv to convert output from tf.exe from the specified encoding to utf-8, value is passed as-is to iconv, so it should be an encoding
 ---@field version_control_web_url string this should look something like 'http://{host}/tfs/{collection}/{project}/_versionControl'
 ---@field workfold? workfold the default workfold to use. See $tf vc help workfold 
+---@field diff_open_cmd? string command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
 
 local variables = {
   debug = { fallback = false, },
@@ -23,6 +24,7 @@ local variables = {
   output_encoding = { fallback = nil, },
   version_control_web_url = { fallback = nil, },
   workfold = { fallback = nil, },
+  diff_open_cmd = { fallback = 'above split', },
 }
 
 --[[

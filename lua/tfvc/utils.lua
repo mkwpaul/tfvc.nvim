@@ -310,6 +310,20 @@ function M.get_workfold_or_get_cached()
   return nil
 end
 
+---@param path string
+---@param relative boolean
+---@return string path the mapped path
+function M.server_path_to_local_path(path, relative)
+  local workfold = M.get_workfold_or_get_cached()
+  assert(workfold, 'Workfold must be initialized. Try Again.')
+  local localpath, count = path:gsub(workfold.serverPath, workfold.localPath)
+  assert(count == 1, 'server_path_to_local_path, gsub of serverroot failed')
+  if relative then
+    localpath = M.get_local_path_relative(localpath)
+  end
+  return localpath
+end
+
 function M.cmd_open_web_history()
   local v = require 'tfvc.options'
   local workfold = M.get_workfold_or_get_cached()
