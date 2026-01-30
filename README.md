@@ -61,7 +61,7 @@ for example.
 
 Example configuration:
 ```lua
----@type tfvc_user_vars
+---@type tfvc.user_vars
 vim.g.tfvc = {
   output_encoding = 'cp1252',
   version_control_web_url = 'http://zesrvtfs:8080/tfs/DefaultCollection/MyProj/_versionControl',
@@ -140,8 +140,8 @@ This should look something like `http://{host}/tfs/{collection}/{project}/_versi
 The default workfold to use. Run `tf.exe workfold` to see what you
 have configured with TF itself. If set, value must be table of type workfold,
 i.e. it must have fields:
-```
-  --@type workfold
+```lua
+  --@type tfvc.workfold
   vim.g.tfvc_workfold = {
     collection = 'http://zesrvtfs:8080/tfs/defaultcollection',
     localPath = 'C:/dev/tfs',

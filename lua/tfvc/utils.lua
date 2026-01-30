@@ -1,12 +1,12 @@
 local M = {}
 
----@type table<file_version>
+---@type table<tfvc.file_version>
 M.file_versions = {}
----@type table<pending_change>
+---@type table<tfvc.pending_change>
 M.pending_changes = {}
 ---@type number|nil
 M.pending_changes_last_updated = nil
----@type workfold cached from output or user-provided
+---@type tfvc.workfold cached from output or user-provided
 M.workfold = nil
 
 ---@returns a generator that yields lines from a string
@@ -60,20 +60,19 @@ function M.is_within_workspace(full_path)
   return vim.startswith(full_path, cwd)
 end
 
----@class tf_cmd_opts
+---@class tfvc.tf_cmd_opts
 ---@field print_stdout boolean? should output be printed in messages?
 ---@field suppress_echo boolean? should command that was ran not be printed?
 ---@field return_stderr_on_failure boolean? should callback be called despite non-zero exit-code?
 ---@field debug boolean? print full trace 
 
---- Executes a command and calls the exit_callback when the command is finished.
+--- calls TF.exe with the specified arguments
 ---@param command string[] arguments to pass to TF.exe
----@param opts tf_cmd_opts?
+---@param opts tfvc.tf_cmd_opts?
 ---@param callback fun(obj: vim.SystemCompleted)?
 function M.tf_cmd(command, opts, callback)
 
   opts = opts or {}
-
   local v = require 'tfvc.options'
   table.insert(command, 1, v.executable_path)
   local command_string = table.concat(command, ' ')
@@ -141,7 +140,7 @@ end
 M.scheme_mappings = {
   ['file:'] = function(_, uri)
     if uri == 'file://' then
-      error('Not a file-buffer', vim.log.levels.ERROR)
+      return './'
     end
     return M.file_uri_to_path(uri)
   end,
@@ -187,7 +186,7 @@ local function url_encode(url)
   return url
 end
 
----@param versionspec versionspec
+---@param versionspec tfvc.versionspec
 ---@param file string
 ---@return string|nil server_file or null
 local function get_cached_file_version(versionspec, file)
@@ -200,14 +199,14 @@ local function get_cached_file_version(versionspec, file)
 end
 
 ---@param path string path to the file to get the version from
----@param versionspec versionspec?
+---@param versionspec tfvc.versionspec?
 ---@param force_fresh boolean? If true, the buffer will be reloaded from the server
 ---@param callback fun(temp_file_path : string) continuation callback
 function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callback)
 
   versionspec = versionspec or require('tfvc.options').default_versionspec
 
-  ---@type table<file_version>
+  ---@type table<tfvc.file_version>
   local cache = M.file_versions or {}
   if not force_fresh then
     ---@diagnostic disable-next-line: param-type-mismatch
@@ -225,7 +224,7 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
       if obj.stdout then
         print(obj.stdout)
       end
-      ---@type file_version
+      ---@type tfvc.file_version
       local cache_entry = {
         versionspec = versionspec,
         local_file = path,
@@ -253,7 +252,7 @@ Collection: [url to server]
  [TfsServerPath]: [MappedLocalPath]
 --]]
 ---@param output string
----@return workfold | nil
+---@return tfvc.workfold | nil
 local function parse_tf_workfold(output)
   local workfold = {}
   local iter = line_iter(output)
@@ -282,7 +281,7 @@ local function parse_tf_workfold(output)
   return workfold
 end
 
----@return workfold?
+---@return tfvc.workfold?
 function M.get_workfold_or_get_cached()
 
   local workfold_from_user = require('tfvc.options').workfold
@@ -359,6 +358,76 @@ function M.close_tfvc_diff_wins()
       vim.api.nvim_win_close(win, true)
     end
   end
+end
+
+function M.diff_files(left, right)
+  local u = require 'tfvc.utils'
+  local vars = require 'tfvc.options'
+
+  -- close wins that we previously opened
+  -- otherwise new splits will acculumate when going throuhg multiple files
+  -- which the user would have to close manually
+  u.close_tfvc_diff_wins()
+  vim.cmd.diffoff({ bang = true })
+  vim.cmd ('keepjumps ' .. vars.diff_open_cmd ..  ' ' .. right)
+  vim.cmd ('keepjumps diffsplit ' .. left)
+
+  if vars.diff_no_split then vim.cmd ':norm q' end
+  if vars.diff_open_folds then vim.cmd ':norm zr' end
+  -- note that diff_open_folds has additional logic
+  -- where the cursor is moved to the first change
+  -- this is handeld in the tfvc:///files callback
+end
+
+---@param opts { diff_no_split:boolean?, diff_open_folds:boolean?, versionspec:string? }?
+function M.tf_compare(opts)
+  opts = opts or {}
+  local path = M.get_local_path('tf_compare', 0)
+  if not path then
+    return
+  end
+
+  local versionspec = opts.versionspec or require('tfvc.options').default_versionspec
+  M.close_tfvc_diff_wins()
+  vim.cmd(':diffo!')
+  vim.cmd.diffsplit('tfvc:///files/'..versionspec..'/'..path)
+
+  local o = require 'tfvc.options'
+  if opts.diff_no_split == nil then opts.diff_no_split = o.diff_no_split  end
+  if opts.diff_open_folds == nil then opts.diff_open_folds = o.diff_open_folds end
+  if opts.diff_no_split then vim.cmd ':norm q' end
+  if opts.diff_open_folds then vim.cmd ':norm zr' end
+end
+
+function M.toggle_diff()
+  local was_diff =  vim.api.nvim_win_get_option(0, 'diff')
+  if vim.b[0].is_server_file then
+    local v = require('tfvc.options')
+    if vim.b[0].versionspec == v.default_versionspec then
+      vim.api.nvim_win_close(0, true)
+      return
+    end
+  end
+  if was_diff then
+    M.close_tfvc_diff_wins()
+    vim.cmd(':diffo!')
+  else
+    M.tf_compare()
+  end
+end
+
+---@param files string[] list of file paths
+---@param versionspec tfvc.versionspec?
+function M.preload_versions_for_files(files, versionspec, force_fresh)
+  for _, file in pairs(files) do
+    M.tf_get_version_from_versionspec(file, versionspec, force_fresh, function () end)
+  end
+end
+
+function M.get_changeset_web_url(changeset)
+  local vars = require('tfvc.options')
+  local header = vars.version_control_web_url .. '/changeset/'.. changeset
+  return header
 end
 
 return M

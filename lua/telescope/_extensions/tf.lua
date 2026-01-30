@@ -1,7 +1,7 @@
 local telescope = require 'telescope'
 
 ---@param in_cwd boolean filter pending changes to only those within the current workspace
----@param pending_changes table<pending_change>
+---@param pending_changes table<tfvc.pending_change>
 local function show_telescope_finder_impl(pending_changes, in_cwd, opts)
   local finders = require "telescope.finders"
   local action = require "telescope.actions"
@@ -21,7 +21,7 @@ local function show_telescope_finder_impl(pending_changes, in_cwd, opts)
     map("i", "<CR>", action.file_edit)
     -- TODO get revert changes working
     map("i", "<C-u>", function(_)
-      ---@type pending_change
+      ---@type tfvc.pending_change
       local selected = tl_state.get_selected_entry()
 
       local choice = vim.fn.input ({prompt =  "Undo PendingChanges in " .. selected.name .. "? (y/n)",  default = 'y', cancelreturn = 'n' })
@@ -32,7 +32,7 @@ local function show_telescope_finder_impl(pending_changes, in_cwd, opts)
     end)
   end
 
-  ---@param entry pending_change
+  ---@param entry tfvc.pending_change
   local function entry_maker(entry)
     local path = u.get_local_path_relative(entry.Local)
     local display = path .. " " .. tfvc_status.change_type_to_icons(entry.Change)

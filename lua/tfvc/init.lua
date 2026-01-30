@@ -1,52 +1,5 @@
 local M = {}
 
----@param opts { diff_no_split:boolean?, diff_open_folds:boolean?, versionspec:string? }?
-function M.tf_compare(opts)
-  opts = opts or {}
-  local u = require 'tfvc.utils'
-  local path = u.get_local_path('tf_compare', 0)
-  if not path then
-    return
-  end
-
-  local versionspec = opts.versionspec or require('tfvc.options').default_versionspec
-  u.close_tfvc_diff_wins()
-  vim.cmd(':diffo!')
-  vim.cmd.diffsplit('tfvc:///files/'..versionspec..'/'..path)
-
-  local o = require 'tfvc.options'
-  if opts.diff_no_split == nil then opts.diff_no_split = o.diff_no_split  end
-  if opts.diff_open_folds == nil then opts.diff_open_folds = o.diff_open_folds end
-  if opts.diff_no_split then vim.cmd ':norm q' end
-  if opts.diff_open_folds then vim.cmd ':norm zr' end
-end
-
-function M.toggle_diff()
-  local was_diff =  vim.api.nvim_win_get_option(0, 'diff')
-  if vim.b[0].is_server_file then
-    local v = require('tfvc.options')
-    if vim.b[0].versionspec == v.default_versionspec then
-      vim.api.nvim_win_close(0, true)
-      return
-    end
-  end
-  if was_diff then
-    require('tfvc.utils').close_tfvc_diff_wins()
-    vim.cmd(':diffo!')
-  else
-    M.tf_compare()
-  end
-end
-
----@param files string[] list of file paths
----@param versionspec versionspec?
-function M.preload_versions_for_files(files, versionspec, force_fresh)
-  local u = require 'tfvc.utils'
-  for _, file in pairs(files) do
-    u.tf_get_version_from_versionspec(file, versionspec, force_fresh, function () end)
-  end
-end
-
 local function cmd_from_verb(verb, print_stdout, callback)
   ---@param opts vim.api.keyset.create_user_command.command_args
   return function(opts)
@@ -58,7 +11,7 @@ local function cmd_from_verb(verb, print_stdout, callback)
   end
 end
 
----@class subcommand
+---@class tfvc.subcommand
 ---@field desc string
 ---@field complete nil|boolean|function
 ---@field run fun(opts: vim.api.keyset.create_user_command.command_args)
@@ -73,7 +26,7 @@ end
 --- It's not something that needs to be done very often
 --- and can be easily accomplished by just using the command line tool directly.
 
----@type table<string,subcommand>
+---@type table<string,tfvc.subcommand>
 M.commands = {
   add = {
     desc = 'Add file to version sontrol',
@@ -136,7 +89,7 @@ M.commands = {
       if #args > 0 then
         spec = args[1]
       end
-      M.tf_compare({ versionspec = spec, })
+      require('tfvc.utils').tf_compare({ versionspec = spec, })
     end
   },
   openWebHistory = {
@@ -157,7 +110,7 @@ M.commands = {
           return pending_change.Local
         end, pending_changes)
 
-        M.preload_versions_for_files(local_paths)
+        require('tfvc.utils').preload_versions_for_files(local_paths)
       end))
     end
   },
@@ -203,8 +156,71 @@ M.commands = {
   }
 }
 
+local function path_complete(start)
+  if start == '' or start == '.' then
+    start = './'
+  end
+  local entries = {}
+  for current, type in vim.fs.dir(start) do
+    if type == 'file' then
+      table.insert(entries, start .. current)
+    end
+    if type == 'directory' then
+      table.insert(entries, start .. current .. '/' )
+    end
+  end
+  -- sort so directories are listed first, and then files
+  table.sort(entries, function(a, b)
+    local a_dir = a:sub(#a) == '/'
+    local b_dir = b:sub(#b) == '/'
+    if a_dir and not b_dir then return true end
+    if b_dir and not a_dir then return false end
+    return a > b
+  end)
+  return entries
+end
+
+local cmd_name = 'TF'
+function M.cmd_TF_complete(arg_lead, cmdline, cursor_pos)
+
+  local cmd_keys = vim.tbl_keys(M.commands)
+  -- check if we already have a subcommand typed, and do subcommand specific completion
+  local subcmd, subcmd_arg_lead = cmdline:match('^' .. cmd_name .. '[!]*%s(%S+)%s(.*)$')
+  if subcmd and subcmd_arg_lead and M.commands[subcmd] then
+    local subcomplete = M.commands[subcmd].complete
+    if subcomplete == true then
+      return path_complete(subcmd_arg_lead)
+    end
+    if type(subcomplete) == 'function' then
+      return subcomplete(subcmd_arg_lead, arg_lead, cmdline, cursor_pos)
+    end
+  end
+  -- complete subcommands
+  if cmdline:match('^' .. cmd_name .. '[!]*%s+%w*$') then
+    return vim.tbl_filter(function(command)
+      return command:find(arg_lead) ~= nil
+    end, cmd_keys)
+  end
+end
+
+---@param opts vim.api.keyset.create_user_command.command_args
+function M.cmd_TF(opts)
+  local tfvc = require 'tfvc'
+  local fargs = opts.fargs
+  local cmd = fargs[1]
+  local args = #fargs > 1 and vim.list_slice(fargs, 2, #fargs) or {}
+  local subcommand = tfvc.commands[cmd]
+  if subcommand then
+    assert(type(subcommand.run) == 'function')
+    opts.fargs = args
+    subcommand.run(opts)
+  else
+    vim.notify(cmd_name .. ': Unknown subcommand: ' .. cmd, vim.log.levels.ERROR, { title = 'tfvc.nvim' })
+  end
+end
+
 --- doesn't initialize this plugin; only sets options
----@param opts tfvc_user_vars
+---@param opts tfvc.user_vars
 function M.setup(opts)
   local tfvc = vim.g.tfvc or {}
   vim.g.tfvc = vim.tbl_deep_extend('force', tfvc, opts)

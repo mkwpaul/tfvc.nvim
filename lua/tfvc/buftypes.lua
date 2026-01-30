@@ -1,17 +1,11 @@
 --- implements reading logic and keyhandling for custom tfvc:/// buffers
 local M = {}
 
-local function get_changeset_web_url(changeset)
-  local vars = require('tfvc.options')
-  local header = vars.version_control_web_url .. '/changeset/'.. changeset
-  return header
-end
-
 --- tries to read the changeset number from the current line,
 --- when called during visual mode, returns both the changeset numbers of the ends of the selection
 --- returns nil (or nil, nil) if the corresponding line has no changeset number
 ---@param buf number
-local function history___get_changeset_from_line(buf)
+function M.history___get_changeset_from_line(buf)
   local mode = vim.api.nvim_get_mode().mode
   if mode == 'v' or mode == 'V' then
 
@@ -44,34 +38,15 @@ local function history___get_changeset_from_line(buf)
   end
 end
 
-local function diff_files(left, right)
-  local u = require 'tfvc.utils'
-  local vars = require 'tfvc.options'
-
-  -- close wins that we previously opened
-  -- otherwise new splits will acculumate when going throuhg multiple files
-  -- which the user would have to close manually
-  u.close_tfvc_diff_wins()
-  vim.cmd.diffoff({ bang = true })
-  vim.cmd ('keepjumps ' .. vars.diff_open_cmd ..  ' ' .. right)
-  vim.cmd ('keepjumps diffsplit ' .. left)
-
-  if vars.diff_no_split then vim.cmd ':norm q' end
-  if vars.diff_open_folds then vim.cmd ':norm zr' end
-  -- note that diff_open_folds has additional logic
-  -- where the cursor is moved to the first change
-  -- this is handeld in the tfvc:///files callback
-end
-
---- options for calling tf.exe 
----@type tf_cmd_opts
-local tfcmdOpts = {
+--- options for calling tf.exe
+---@type tfvc.tf_cmd_opts
+local tf_cmd_opts = {
   suppress_echo = true,
   return_stderr_on_failure = true,
   debug = true,
 }
 
-function M.history_callback(args)
+function M.history_bufreadcmd(args)
   local buf = args.buf
   local bufOpt = { buf = buf }
 
@@ -85,7 +60,7 @@ function M.history_callback(args)
   local limit = vars.history_entry_limit
   local cmd = { 'history',  path, '/recursive', '/noprompt', '/stopafter:'..limit, '/format:brief' }
   local u = require('tfvc.utils')
-  u.tf_cmd(cmd, tfcmdOpts, vim.schedule_wrap(function(obj)
+  u.tf_cmd(cmd, tf_cmd_opts, vim.schedule_wrap(function(obj)
     -- Replace buffer content with command output
     vim.api.nvim_set_option_value('filetype', 'tf_history', bufOpt)
     vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
@@ -110,14 +85,13 @@ function M.history_callback(args)
       vim.cmd(goto_content)
     end)
 
-    -----------
     --- keymaps
 
     ---@param cb fun(cs1:string,cs2:string?)
     ---@return fun() function
     local function with_cs_do(cb)
       return function ()
-        local cs1, cs2 = history___get_changeset_from_line(buf)
+        local cs1, cs2 = M.history___get_changeset_from_line(buf)
         if cs1 then cb(cs1, cs2) end
       end
     end
@@ -128,17 +102,17 @@ function M.history_callback(args)
       vim.cmd('e tfvc:///files/C' .. cs1 .. '/' .. path)
     end)
     local comp_via_visual = with_cs_do(function (cs1, cs2)
-      diff_files(
+      u.diff_files(
        'tfvc:///files/C' .. cs1 .. '/' .. path,
        'tfvc:///files/C' .. cs2 .. '/' .. path)
     end)
     local compare_with_local = with_cs_do(function (cs1)
-      diff_files(
+      u.diff_files(
         'tfvc:///files/C' .. cs1 .. '/' .. path,
         path)
     end)
     local open_cs_in_web = with_cs_do(function (cs1)
-      vim.ui.open(get_changeset_web_url(cs1));
+      vim.ui.open(u.get_changeset_web_url(cs1));
     end)
 
     local keymapOpt = { buffer = buf }
@@ -155,7 +129,7 @@ function M.history_callback(args)
   end))
 end
 
-function M.changeset_callback(args)
+function M.changeset_bufreadcmd(args)
   local buf = args.buf
   local bufOpt = { buf = buf }
 
@@ -168,14 +142,14 @@ function M.changeset_callback(args)
   local cmd = { 'changeset', cs, '/noprompt',  }
 
   local u = require('tfvc.utils')
-  u.tf_cmd(cmd, tfcmdOpts, vim.schedule_wrap(function(obj)
+  u.tf_cmd(cmd, tf_cmd_opts, vim.schedule_wrap(function(obj)
     -- Replace buffer content with command output
     vim.api.nvim_set_option_value('filetype', 'tf_changeset', bufOpt)
     vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
 
     local buffer_content = {
       '# TFVC-Changeset: ' .. cs,
-      '# Web-Url: ' .. get_changeset_web_url(cs),
+      '# Web-Url: ' .. u.get_changeset_web_url(cs),
       '# Help: g?',
     }
 
@@ -208,17 +182,17 @@ function M.changeset_callback(args)
       end
     end
     local compare_with_previous = with_path_do(function(path)
-      diff_files(
+      u.diff_files(
         'tfvc:///files/C' .. tonumber(cs) - 1 .. '/' .. path,
         'tfvc:///files/C' .. cs .. '/' .. path)
     end)
     local compare_with_latest = with_path_do(function(path)
-      diff_files(
+      u.diff_files(
         'tfvc:///files/C' .. cs .. '/' .. path,
         'tfvc:///files/T/' .. path)
     end)
     local compare_with_local = with_path_do(function(path)
-      diff_files(
+      u.diff_files(
         'tfvc:///files/C' .. cs .. '/' .. path,
         path)
     end)
@@ -237,7 +211,7 @@ function M.changeset_callback(args)
   end))
 end
 
-function M.files_callback(args)
+function M.files_bufreadcmd(args)
   local buf = args.buf
   local bufOpt = { buf = buf }
 

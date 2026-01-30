@@ -1,5 +1,5 @@
 local M = {}
-local function toggle_diff() require('tfvc').toggle_diff() end
+local function toggle_diff() require('tfvc.utils').toggle_diff() end
 
 M.mappings = {
   { key = '<leader>ta', cmd = '<cmd>TF add<CR>', desc = 'Add current File to Source Control', },

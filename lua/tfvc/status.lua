@@ -23,7 +23,7 @@ local M = {}
 ---@field ver string
 
 ---@param node xmlNode
----@param changes table<pending_change>
+---@param changes table<tfvc.pending_change>
 local function iter_xml(node, changes)
   if node.tag == 'PendingChange' then
     ---@type xmlPendingChange
@@ -46,7 +46,7 @@ local function iter_xml(node, changes)
 end
 
 ---@param status_xml string 
----@return table<pending_change>
+---@return table<tfvc.pending_change>
 local function parse_status_xml(status_xml)
   local doc = xmlparser.parse(status_xml, false)
   local changes = {}
@@ -54,7 +54,7 @@ local function parse_status_xml(status_xml)
   return changes
 end
 
----@param callback fun(changes:pending_change[])
+---@param callback fun(changes:tfvc.pending_change[])
 function M.get_pending_changes_async(callback)
   u.tf_cmd({ 'status', '/format:xml' }, nil, function(obj)
     if obj.code ~= 0 then
@@ -71,7 +71,7 @@ function M.get_pending_changes_async(callback)
 end
 
 ---@param force_fresh boolean 
----@param callback fun(changes:pending_change[])
+---@param callback fun(changes:tfvc.pending_change[])
 function M.do_with_pending_changes(force_fresh, callback)
   local pending_changes = u.pending_changes
   if pending_changes == nil or force_fresh then
