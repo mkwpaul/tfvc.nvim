@@ -73,6 +73,6 @@ end
 return telescope.register_extension({
   setup = function (_, _) end,
   exports = {
-    tf_status = cmd_show_telescope_finder,
+    status = cmd_show_telescope_finder,
   },
 })

@@ -1,14 +1,14 @@
 # tfvc.nvim
 
-tfvc.nvim is an unofficial plugin for integration of TeamFoundation verion
-control, also known as TFS, referred to as 'tfvc' from here on.
+tfvc.nvim is a neovim plugin providing integration for TeamFoundation version
+control (TFS), referred to as 'tfvc' from here on.
 
 It provides commands to checkout files, undo changes, view history, view
 changesets, compare pending changes and other things. Some commands of the TF
 cli tool do not -and will not- have dedicated commands though.
 
-The goal is to optimize the workflow around working with a tfvc repository using nvim.
-Not to replace the commandline tool.
+The goal is to optimize the workflow around working with a tfvc repository
+using nvim, not to replace the commandline tool.
 
 Tested on Windows 10/11 and TF Version 17.10.34824.3, although it'll probably
 work with earlier versions.
@@ -27,12 +27,12 @@ Add this repository with your plugin-manager of choice. Here's Lazy:
 ```
 
 Ensure that the parent directory of the TF.exe is listed in your PATH variable,
-Either by appending the location of the executable manually or by running nvim
+either by appending the location of the executable manually or by running nvim
 within Visual Studios's developer Shell profile. You can alternatively specify
 the absolute path to the TF executable via the `executable_path` option.
 
 Different commands also require additional data, like the url to the
-TeamFoundation server, or the local workfold-mapping, which can be inferred
+tfvc server, or the local workfold-mapping, which can be inferred
 automatically, but is better to be set manually.
 
 Specifically, `version_control_web_url` and `workfold` are required for the
@@ -94,6 +94,13 @@ using TF diff, Default is false.
 if true, then don't collapse regions without changes, when
 using TF diff Default is false.
 
+- `diff_open_cmd`
+
+Command to use when opening diffsplits from history or changeset buffers.
+Should be of `edit`, `split`, `vsplit`, `above split`, `top` etc. see `:h window`
+
+Default is `above split` i.e. open splits above the current window.
+
 - `executable_path`
 
 Full path to the TF executable. If not set, the it will be
@@ -112,8 +119,11 @@ Default is 300 entries.
 
 - `history_open_cmd`
 
-command to use when navigating to `tfvc:///` paths via commands, should be one
-of `edit`, `split`, `vsplit` etc. Default is `edit`.
+command to use when navigating to `tfvc:///history` paths via `TF history`.
+This should be one of `edit`, `split`, `vsplit`, `above split`, `top` etc. see `:h
+window`
+
+Default is `edit` i.e. open history in current window.
 
 - `output_encoding`
 
@@ -172,24 +182,13 @@ potentially add additional files you didn't mean to checkout/add.
 
 - `:TF diff`
 
-Diffs the local version of the current file with a specific server version.
-The versionspec is passed directly to the `tf view` command.
-
-Tip:
-To quickly review your pending changes bevor commiting, you can use :TF diff,
-`:TF status` and `:TF loadDiffs` if you've got a slow server, in combination with
-the quickfix list, the `:cnext` and `cprev` commands and |CTRL-W_o| to
-
-First, run `:TF loadDiffs` to preload all server files.
-Then open the changed files in telescope with `:TF status` and press `<C-q>` to
-put the files into the quickfix list.
-
-Then you can use `:cnext` followed by |CTRL-W_o| and `:TF diff` to view and diff
-the next file.
+Diffs the local version of the current file with a specific server version, per default the latest version.
+Optionally takes a versionspec as an argument to specify the version.
 
 - `:TF history`
 
-Open changelog (history) of the current file or directory in an interactive buffer.
+Open history (changelog) of the current file / directory in an interactive buffer.
+You can also specify a path manually insead of using the current buffer.
 
 - `:TF openWebHistory`
 
@@ -213,18 +212,19 @@ Optional flags: `all`, `cached`, `fresh`, `in_cwd` or their initials
 
 - `:TF undo`
 
-Undoes any pending changes in the current file.
+Undoes any pending changes in the current file or provided path.
 Non-blocking equivalent to `:!tf undo "%"`
 Does not work with directories (for safety)
+You can also specify a path manually insead of using the current file.
 
 - `:TF info`
 
-Shows status of the current file or directory
+Shows status of the current file or directory or provided path.
 Non-blocking equivalent to `:!tf info "%"`
 
 - `:TF rename`
 
-Moves or renames a file or directory.
+Moves or renames the current file or directory or provided path.
 
 - `:TF delete`
 
@@ -287,10 +287,9 @@ because it has been renamed or deleted.
 dd    Open the changeset of the current line
 gx    Open the changeset in the webclient
 
-# the following are only availible in file-histories, not directory-histories
+# the remaining are only availible in file-histories, not directory-histories
 gf    Open the changset-version of file
 dl    Compare changset-version of file with the local version of the file
-
 <CR>  (visual mode keymap) Compare versions based on the start, and end of the visual selection 
 dd    (visual mode keymap) Compare versions based on the start, and end of the visual selection 
 ```

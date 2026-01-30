@@ -137,22 +137,22 @@ function M.file_uri_to_path(uri)
   return path
 end
 
----@type table<string, fun(buf: number, uri: string):string, string> dictionary of uri-schemes and functions that resolve a local path for given a buffer and uri with that scheme
-M.schemeMappers = {
+---@type table<string, fun(buf: number, uri: string):string> dictionary of uri-schemes and functions that resolve a local path for given a buffer and uri with that scheme
+M.scheme_mappings = {
   ['file:'] = function(_, uri)
     if uri == 'file://' then
       error('Not a file-buffer', vim.log.levels.ERROR)
     end
-    return M.file_uri_to_path(uri), 'file'
+    return M.file_uri_to_path(uri)
   end,
   ['tfvc:///files/'] = function (buf, _)
     local p = vim.b[buf].local_path
     assert(type(p) == 'string', [[tfvc:///files buffer must have buffer-varialbe 'local_path' set]])
-    return p, 'file'
+    return p
   end,
   ['oil:'] = function (buf, _)
     ---@diagnostic disable-next-line: return-type-mismatch
-    return require('oil').get_current_dir(buf), 'directory'
+    return require('oil').get_current_dir(buf)
   end,
 }
 
@@ -162,7 +162,7 @@ M.schemeMappers = {
 function M.get_local_path(command, buf)
   buf = buf or vim.api.nvim_get_current_buf()
   local uri = vim.uri_from_bufnr(buf)
-  for key, value in pairs(M.schemeMappers) do
+  for key, value in pairs(M.scheme_mappings) do
     if vim.startswith(uri, key) then
       return value(buf, uri);
     end
