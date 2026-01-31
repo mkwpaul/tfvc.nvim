@@ -1,13 +1,27 @@
 local M = {}
 
+---@param args vim.api.keyset.create_user_command.command_args
+local function get_path_from_cmd_args(args)
+  local u = require 'tfvc.utils'
+  local path = nil
+  if #args.fargs > 0 then
+    path = vim.fn.expand(args.fargs[1])
+    local mapped, local_path = pcall(u.to_local_path, path, nil, 'history')
+    if mapped then
+      path = local_path
+    end
+  end
+  if not path then
+    path = u.get_local_path('history') or '.'
+  end
+  return path
+end
+
 local function cmd_from_verb(verb, print_stdout, callback)
   ---@param opts vim.api.keyset.create_user_command.command_args
   return function(opts)
-    local args = {}
-    local u = require('tfvc.utils')
-    local path = #opts.fargs > 0 and opts.fargs[1] or u.get_local_path(verb)
-    args = { 'vc' , verb, path }
-    u.tf_cmd(args, { print_stdout = print_stdout } , callback)
+    local args = { 'vc' , verb, get_path_from_cmd_args(opts) }
+    require('tfvc.utils').tf_cmd(args, { print_stdout = print_stdout } , callback)
   end
 end
 
@@ -146,12 +160,10 @@ M.commands = {
   history = {
     desc = 'Shows history of current file in interactive buffer',
     complete = true,
-    run = function (opts)
-      local u = require('tfvc.utils')
+    run = function (args)
       local v = require('tfvc.options')
-      local path = #opts.fargs > 0 and opts.fargs[1] or u.get_local_path('history') or '.'
-      local opening_cmd = v.history_open_cmd
-      vim.cmd(opening_cmd .. ' tfvc:///history/'.. path)
+      local path = get_path_from_cmd_args(args)
+      vim.cmd(v.history_open_cmd .. ' tfvc:///history/'.. path)
     end
   }
 }
@@ -160,15 +172,48 @@ local function path_complete(start)
   if start == '' or start == '.' then
     start = './'
   end
+
+  -- remove escaping any potentially escaped spaces
+  -- that we escaped during an earlier path_complete
+  -- we won't find any entries with vim.fs.dir with the escaped spaces
+  start = start:gsub([[\ ]], ' ')
+
+  --tfvc_comp.start = start
+  local paren = start
+  local filter = nil
+  local iter = nil
+  if start:sub(#start) == '/' then
+    iter = vim.fs.dir(start)
+  else
+    paren = vim.fs.dirname(start) .. '/'
+    filter = start:gsub(paren, '')
+    iter = vim.fs.dir(paren)
+  end
+
   local entries = {}
-  for current, type in vim.fs.dir(start) do
+  for current, type in iter do
     if type == 'file' then
-      table.insert(entries, start .. current)
+      table.insert(entries, paren .. current)
     end
     if type == 'directory' then
-      table.insert(entries, start .. current .. '/' )
+      table.insert(entries, paren .. current .. '/' )
     end
   end
+
+  if filter then
+    local prefix = string.lower(paren .. filter)
+    entries = vim.tbl_filter(function (path)
+      local found = string.lower(path):find(prefix, 1, true)
+      return found ~= nil
+    end, entries)
+  end
+
+  -- we want the path to be parsed as a single argument
+  -- and for that vim's commandline needs spaces escaped with back-slash
+  entries = vim.tbl_map(function (path)
+    return path:gsub(' ', [[\ ]])
+  end, entries)
+
   -- sort so directories are listed first, and then files
   table.sort(entries, function(a, b)
     local a_dir = a:sub(#a) == '/'
@@ -209,10 +254,16 @@ function M.cmd_TF(opts)
   local fargs = opts.fargs
   local cmd = fargs[1]
   local args = #fargs > 1 and vim.list_slice(fargs, 2, #fargs) or {}
+
   local subcommand = tfvc.commands[cmd]
   if subcommand then
     assert(type(subcommand.run) == 'function')
     opts.fargs = args
+
+    local vars = require 'tfvc.options'
+    if vars.debug then
+      print(vim.inspect(opts))
+    end
     subcommand.run(opts)
   else
     vim.notify(cmd_name .. ': Unknown subcommand: ' .. cmd, vim.log.levels.ERROR, { title = 'tfvc.nvim' })

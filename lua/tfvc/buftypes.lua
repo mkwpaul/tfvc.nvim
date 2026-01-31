@@ -166,9 +166,7 @@ function M.changeset_bufreadcmd(args)
       vim.cmd.nohlsearch()
     end)
 
-    -----------
     --- keymaps
-
     ---@param cb fun(path:string)
     local function with_path_do(cb)
       return function ()
@@ -257,6 +255,36 @@ function M.files_bufreadcmd(args)
       vim.cmd [[ filetype detect ]]
       vim.api.nvim_set_option_value('modifiable', false, bufOpt)
       vim.api.nvim_set_option_value('modified', false, bufOpt)
+
+      -- keymaps
+      local cs = nil
+      local is_changeset_vs = versionspec:sub(1,1) == 'C'
+      if is_changeset_vs then
+        cs = tonumber(versionspec:sub(2))
+      end
+
+      local function server_file_info()
+        local info_content = {
+          '# TFVC Serverfile',
+          '# Path: ' .. path,
+          '# Versionspec: ' .. versionspec,
+          "# '<leader>te' to goto to the local file of this server file",
+          "# '<leader>th' to view the history of this file",
+        }
+        if cs then
+          local extra = "# '-' to view the changeset associated with this fileversion"
+          table.insert(info_content, extra)
+        end
+        vim.print(table.concat(info_content, '\n'))
+      end
+      local keymapOpt = { buffer = buf }
+      vim.keymap.set('n', '<leader>tc','<cmd>echo "Cannot checkout server-file"<CR>' , keymapOpt)
+      vim.keymap.set('n', '<leader>ti', server_file_info, keymapOpt)
+      vim.keymap.set('n', '<leader>te', '<cmd>e '.. path .. '<CR>', keymapOpt)
+      if cs then
+        local changeset_uri = 'tfvc:///changeset/' .. cs
+        vim.keymap.set('n', '-', '<cmd>e '.. changeset_uri .. '<CR>', keymapOpt)
+      end
     end)
   end)
 end

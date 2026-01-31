@@ -155,12 +155,8 @@ M.scheme_mappings = {
   end,
 }
 
----@param command string? only used for logging when something goes wrong
----@param buf number? vim buffer id, falls back to current buffer if not set
----@return  string?, string? local_path and 'file' or 'directory'
-function M.get_local_path(command, buf)
-  buf = buf or vim.api.nvim_get_current_buf()
-  local uri = vim.uri_from_bufnr(buf)
+function M.to_local_path(uri, buf, command)
+  buf = buf or vim.uri_to_bufnr(uri)
   for key, value in pairs(M.scheme_mappings) do
     if vim.startswith(uri, key) then
       return value(buf, uri);
@@ -170,6 +166,15 @@ function M.get_local_path(command, buf)
     print('Command ' .. command .. 'Invalid for non-file buffers: uri: ' .. uri)
   end
   return nil, nil
+end
+
+---@param command string? only used for logging when something goes wrong
+---@param buf number? vim buffer id, falls back to current buffer if not set
+---@return  string?, string? local_path and 'file' or 'directory'
+function M.get_local_path(command, buf)
+  buf = buf or vim.api.nvim_get_current_buf()
+  local uri = vim.uri_from_bufnr(buf)
+  return M.to_local_path(uri, buf, command)
 end
 
 local function char_to_hex(c) return string.format("%%%02X", string.byte(c)) end
