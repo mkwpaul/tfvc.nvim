@@ -129,20 +129,13 @@ function M.tf_cmd(command, opts, callback)
  end)
 end
 
----@return string filePath uri without the schema prefix and with unescaped URI-escape sequences (%20 = ' ')
-function M.file_uri_to_path(uri)
-  local path = string.gsub(uri, 'file:///', '')
-  path = string.gsub(path, '%%20', ' ')
-  return path
-end
-
 ---@type table<string, fun(buf: number, uri: string):string> dictionary of uri-schemes and functions that resolve a local path for given a buffer and uri with that scheme
 M.scheme_mappings = {
   ['file:'] = function(_, uri)
     if uri == 'file://' then
       return './'
     end
-    return M.file_uri_to_path(uri)
+    return vim.uri_to_fname(uri)
   end,
   ['tfvc:///files/'] = function (buf, _)
     local p = vim.b[buf].local_path
@@ -159,7 +152,9 @@ function M.to_local_path(uri, buf, command)
   buf = buf or vim.uri_to_bufnr(uri)
   for key, value in pairs(M.scheme_mappings) do
     if vim.startswith(uri, key) then
-      return value(buf, uri);
+      local mapped = value(buf, uri);
+      if mapped then mapped = vim.fs.normalize(mapped) end
+      return mapped
     end
   end
   if command then
@@ -338,7 +333,8 @@ function M.cmd_open_web_history()
     return
   end
 
-  local serverPath = file:gsub(workfold.localPath, workfold.serverPath)
+  local serverPath, subcount = file:gsub(workfold.localPath, workfold.serverPath)
+  assert(subcount == 1, 'mapping from local path to server path failed. This is expected when trying to map a file that\'s not part of the tfvc repository.')
   local escapedServerPath = url_encode(serverPath) or ''
   escapedServerPath = escapedServerPath:gsub('%%2E', '.')
 
@@ -362,6 +358,22 @@ function M.close_tfvc_diff_wins()
     if win ~= cur_win and (is_server or vim.api.nvim_win_get_option(win, 'diff')) then
       vim.api.nvim_win_close(win, true)
     end
+  end
+end
+
+function M.diff_files_inline(left, right)
+  local _, inline_diff = pcall(require, 'unified_diff')
+  if not inline_diff then
+    vim.print("'unified_diff' could not be loaded", vim.log.levels.WARN)
+    M.diff_files(left, right)
+    return
+  end
+
+  local buf = vim.uri_to_bufnr(vim.uri_from_fname(right))
+  if inline_diff.has_active_unified_diff(buf) then
+    inline_diff.stop_unified(buf)
+  else
+    inline_diff.setup_unified_diff(buf, left)
   end
 end
 

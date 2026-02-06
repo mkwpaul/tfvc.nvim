@@ -168,6 +168,22 @@ M.commands = {
   }
 }
 
+local _, inline_diff = pcall(require, 'unified_diff')
+if inline_diff then
+
+  M.commands.inline_diff = {
+    desc = 'Experimental: Compare local file to latest server version, (depends on diff executable in PATH)',
+    run = function (args)
+      local path = get_path_from_cmd_args(args)
+      local u = require('tfvc.utils')
+      u.tf_get_version_from_versionspec(path, 'T', false, vim.schedule_wrap(function(server_file)
+        u.diff_files_inline(server_file, path)
+      end))
+    end
+  }
+
+end
+
 local function path_complete(start)
   if start == '' or start == '.' then
     start = './'
