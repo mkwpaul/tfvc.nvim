@@ -31,13 +31,6 @@ either by appending the location of the executable manually or by running nvim
 within Visual Studios's developer Shell profile. You can alternatively specify
 the absolute path to the TF executable via the `executable_path` option.
 
-Different commands also require additional data, like the url to the
-tfvc server, or the local workfold-mapping, which can be inferred
-automatically, but is better to be set manually.
-
-Specifically, `version_control_web_url` and `workfold` are required for the
-`:TF openWebHistory` command.
-
 ## Options
 
 ```lua
@@ -65,11 +58,6 @@ Example configuration:
 vim.g.tfvc = {
   output_encoding = 'cp1252',
   version_control_web_url = 'http://zesrvtfs:8080/tfs/DefaultCollection/MyProj/_versionControl',
-  workfold = {
-    collection = 'http://zesrvtfs:8080/tfs/defaultcollection',
-    localPath = 'C:/dev/mytfsrepo/',
-    serverPath = '$/MyProj',
-  },
 }
 ```
 Full list of Options:
@@ -135,21 +123,6 @@ be an encoding it understands.
 
 This should look something like `http://{host}/tfs/{collection}/{project}/_versionControl`.
 
-- `workfold`
-
-The default workfold to use. Run `tf.exe workfold` to see what you
-have configured with TF itself. If set, value must be table of type workfold,
-i.e. it must have fields:
-```lua
-  --@type tfvc.workfold
-  vim.g.tfvc_workfold = {
-    collection = 'http://zesrvtfs:8080/tfs/defaultcollection',
-    localPath = 'C:/dev/tfs',
-    serverPath = '$/MyProject',
-  }
-```
-Required for `:TF openWebHistory`.
-
 ## Commands
 
 Only one actual user-command is registerd.
@@ -194,7 +167,6 @@ You can also specify a path manually insead of using the current buffer.
 
 Opens the history of the current file or directory in a browser.
 Requires the `version_control_web_url` to be set during setup.
-The |tfvc.workfold| should also be setup to avoid unnecessary queries.
 
 - `:TF loadDiffs`
 

@@ -1,6 +1,0 @@
-{
-    "completion.autoRequire": false,
-    "diagnostics.disable": [
-        "assign-type-mismatch"
-    ]
-}

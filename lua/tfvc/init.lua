@@ -21,7 +21,11 @@ local function cmd_from_verb(verb, print_stdout, callback)
   ---@param opts vim.api.keyset.create_user_command.command_args
   return function(opts)
     local args = { 'vc' , verb, get_path_from_cmd_args(opts) }
-    require('tfvc.utils').tf_cmd(args, { print_stdout = print_stdout } , callback)
+    local vars = require 'tfvc.options'
+    local job = require('tfvc.utils').tf_cmd(args, { print_stdout = print_stdout } , callback)
+    if vars.blocking then
+      job:wait(30000)
+    end
   end
 end
 
@@ -181,7 +185,6 @@ if inline_diff then
       end))
     end
   }
-
 end
 
 local function path_complete(start)

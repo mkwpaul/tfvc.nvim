@@ -56,7 +56,10 @@ function M.history_bufreadcmd(args)
   vim.api.nvim_set_option_value('swapfile', false, bufOpt)
 
   local vars = require('tfvc.options')
-  local path = args.file:gsub('tfvc:///history/', '') or '.'
+  local path = args.file:gsub('tfvc:///history/', '')
+
+  if path == '' or path == '.' or path == './' then path = vim.uv.cwd() end
+
   local limit = vars.history_entry_limit
   local cmd = { 'history',  path, '/recursive', '/noprompt', '/stopafter:'..limit, '/format:brief' }
   local u = require('tfvc.utils')

@@ -6,8 +6,8 @@ M.file_versions = {}
 M.pending_changes = {}
 ---@type number|nil
 M.pending_changes_last_updated = nil
----@type tfvc.workfold cached from output or user-provided
-M.workfold = nil
+---@type tfvc.workfold[] cached from output or user-provided
+M.workfolds = {}
 
 ---@returns a generator that yields lines from a string
 ---@param str string
@@ -80,7 +80,7 @@ function M.tf_cmd(command, opts, callback)
     print(command_string)
   end
 
-  local _ = vim.system(command, nil, function(obj)
+  local job = vim.system(command, nil, function(obj)
     vim.schedule(function ()
       if obj.code ~= 0 then
         local log = command_string .. '\n' .. 'Code:  ' .. obj.code .. '\n' .. (obj.stderr or '') .. (obj.stdout or '')
@@ -126,7 +126,8 @@ function M.tf_cmd(command, opts, callback)
       end
       callback(obj)
     end
- end)
+  end)
+  return job
 end
 
 ---@type table<string, fun(buf: number, uri: string):string> dictionary of uri-schemes and functions that resolve a local path for given a buffer and uri with that scheme
@@ -284,11 +285,25 @@ end
 ---@return tfvc.workfold?
 function M.get_workfold_or_get_cached()
 
-  local workfold_from_user = require('tfvc.options').workfold
-  if workfold_from_user then return workfold_from_user end
-  if M.workfold then return M.workfold end
+  local function try_get_from_cwd()
+    local cwd = vim.uv.cwd()
+    cwd = vim.fs.normalize(cwd):lower()
 
-  M.tf_cmd({ 'workfold' }, nil, function(obj)
+    -- find first workfold where the the cwd is under the localPath of that workfold
+    for _, workfold in ipairs(M.workfolds) do
+      local localPath = vim.fs.normalize(workfold.localPath)
+      localPath = localPath:lower()
+      local index = cwd:find(localPath, 0, true)
+      if index == 1 then
+        return workfold
+      end
+    end
+  end
+
+  local wf = try_get_from_cwd()
+  if wf then return wf end
+
+  local job = M.tf_cmd({ 'workfold' }, { suppress_echo = true }, function(obj)
     if obj.code ~= 0 then
       vim.schedule(function()
         vim.notify('Failed to get workfold: ' .. vim.inspect(obj), vim.log.levels.ERROR)
@@ -303,10 +318,12 @@ function M.get_workfold_or_get_cached()
       end)
       return
     end
-    M.workfold = workfold
+    table.insert(M.workfolds, workfold)
+    wf = workfold
   end)
 
-  return nil
+  job:wait(3000)
+  return wf
 end
 
 ---@param path string

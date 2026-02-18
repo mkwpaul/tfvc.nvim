@@ -9,8 +9,8 @@
 ---@field history_open_cmd? string command to use when navigating to tfvc:/// paths via commands, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
 ---@field output_encoding string? if specified, use iconv to convert output from tf.exe from the specified encoding to utf-8, value is passed as-is to iconv, so it should be an encoding
 ---@field version_control_web_url string this should look something like 'http://{host}/tfs/{collection}/{project}/_versionControl'
----@field workfold? tfvc.workfold the default workfold to use. See $tf vc help workfold 
 ---@field diff_open_cmd? string command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
+---@field blocking? boolean makes commands synchronous, use this when trying to use things like :TF checkout in macros
 
 local variables = {
   debug = { fallback = false, },
@@ -23,8 +23,8 @@ local variables = {
   history_open_cmd = { fallback = 'e', },
   output_encoding = { fallback = nil, },
   version_control_web_url = { fallback = nil, },
-  workfold = { fallback = nil, },
   diff_open_cmd = { fallback = 'above split', },
+  blocking = { fallback = false },
 }
 
 --[[
@@ -73,6 +73,13 @@ setmetatable(M, {
     -- so that stuff can be more easily overwritten with :let g:tfvc_
     local value = nil
     value = vim.g['tfvc_'..k]
+
+    if TF then
+      value = TF[k]
+      if value ~= nil then
+        return value
+      end
+    end
 
     if value ~= nil then
       return value
