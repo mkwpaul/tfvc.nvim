@@ -73,11 +73,10 @@ end
 ---@param force_fresh boolean 
 ---@param callback fun(changes:tfvc.pending_change[])
 function M.do_with_pending_changes(force_fresh, callback)
-  local pending_changes = u.pending_changes
-  if pending_changes == nil or force_fresh then
+  if #u.pending_changes == 0 or force_fresh then
     M.get_pending_changes_async(callback)
   else
-    callback(pending_changes)
+    callback(u.pending_changes)
   end
 end
 

@@ -45,6 +45,7 @@ if not vim.g.tfvc_disable_default_keymaps then
     { key = '<C-A-j>', cmd =  '<cmd>cnext<CR><cmd>TF diff<CR><CR>', desc = 'Diff next file in quickfix list' },
     { key = '<C-A-k>', cmd =  '<cmd>cprev<CR><cmd>TF diff<CR><CR>', desc = 'Diff previous file in quickfix list' },
     { key = '<C-A-l>', cmd =  toggle_diff , desc = 'Toggle diff view' },
+    { key = '<leader>st', cmd =  '<cmd>Telescope tf status<CR>' , desc = 'Search status' },
   }
 
   for _, mapping in pairs(mappings) do

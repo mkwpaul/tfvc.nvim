@@ -2,39 +2,24 @@ local telescope = require 'telescope'
 
 ---@param in_cwd boolean filter pending changes to only those within the current workspace
 ---@param pending_changes table<tfvc.pending_change>
-local function show_telescope_finder_impl(pending_changes, in_cwd, opts)
+local function show_telescope_finder_impl(pending_changes, opts)
+
   local finders = require "telescope.finders"
-  local action = require "telescope.actions"
-  local tl_state = require "telescope.actions.state"
   local conf = require("telescope.config").values
-  local u = require 'tfvc.utils'
   local tfvc_status = require 'tfvc.status'
+  local tfvc_opts = require ('tfvc.options')
+  local tfvc_utils = require 'tfvc.utils'
 
   opts = opts or {}
-  if in_cwd then
+  if tfvc_opts.filter_status_by_cwd then
     pending_changes = vim.tbl_filter(function(change)
-      return u.is_within_workspace(change.Local)
+      return tfvc_utils.is_within_workspace(change.Local)
     end, pending_changes)
-  end
-
-  local function init_mappings(_, map)
-    map("i", "<CR>", action.file_edit)
-    -- TODO get revert changes working
-    map("i", "<C-u>", function(_)
-      ---@type tfvc.pending_change
-      local selected = tl_state.get_selected_entry()
-
-      local choice = vim.fn.input ({prompt =  "Undo PendingChanges in " .. selected.name .. "? (y/n)",  default = 'y', cancelreturn = 'n' })
-      if choice == 'y' then
-        local tfvc = require('tfvc.tfvc')
-        tfvc.tf_undo(nil, selected.Local)
-      end
-    end)
   end
 
   ---@param entry tfvc.pending_change
   local function entry_maker(entry)
-    local path = u.get_local_path_relative(entry.Local)
+    local path = tfvc_utils.get_local_path_relative(entry.Local)
     local display = path .. " " .. tfvc_status.change_type_to_icons(entry.Change)
     return {
       value = entry,
@@ -44,15 +29,31 @@ local function show_telescope_finder_impl(pending_changes, in_cwd, opts)
     }
   end
 
+  local previewer = require ('telescope.previewers').new_buffer_previewer({
+    title = "Diff",
+    define_preview = function(self, entry, status)
+      local cmd = {
+        'diff', '/Format:Unified',
+        '/ignorecase', '/ignorespace', '/noprompt',
+        entry.path
+      }
+      tfvc_utils.tf_cmd(cmd, { suppress_echo = true}, vim.schedule_wrap(function (obj)
+        local lines = vim.split(obj.stdout or obj.stderr, '\r\n')
+        local bufOpt = { buf = self.state.bufnr }
+        vim.api.nvim_set_option_value('filetype', 'diff', bufOpt)
+        vim.api.nvim_buf_set_lines(self.state.bufnr, 0, -1, false, lines)
+      end))
+    end,
+  })
+
   local def = {
-    prompt_title = "PendingChanges",
+    prompt_title = "Pending Changes",
+    sorter = conf.generic_sorter(opts),
+    previewer = previewer,
     finder = finders.new_table {
       results = pending_changes,
       entry_maker = entry_maker,
-      attach_mappings =  init_mappings,
     },
-    sorter = conf.generic_sorter(opts),
-    previewer = conf.file_previewer(opts),
   }
 
   local pickers = require "telescope.pickers"
@@ -62,10 +63,9 @@ end
 ---@param opts vim.api.keyset.create_user_command.command_args
 local function cmd_show_telescope_finder(opts)
   local tfvc_status = require 'tfvc.status'
-  local parsed = tfvc_status.parse_cmd_args(opts)
-  tfvc_status.do_with_pending_changes(parsed.fresh, function (pending_changes)
+  tfvc_status.do_with_pending_changes(true, function (pending_changes)
     vim.schedule(function()
-      show_telescope_finder_impl(pending_changes, parsed.in_cwd, opts)
+      show_telescope_finder_impl(pending_changes, opts)
     end)
   end)
 end
