@@ -108,7 +108,7 @@ function M.tf_cmd(command, opts, callback)
     -- if there's a callback that could possibly make use that output
     if callback then
       local source_enc = v.output_encoding
-      if type(source_enc) == 'string' then
+      if source_enc ~= 'UTF-8'  then
         local stdout = nil
         local stderr = nil
         if obj.stdout and obj.stdout ~= '' then
@@ -200,12 +200,13 @@ local function get_cached_file_version(versionspec, file)
 end
 
 ---@param path string path to the file to get the version from
----@param versionspec tfvc.versionspec?
+---@param versionspec tfvc.versionspec
 ---@param force_fresh boolean? If true, the buffer will be reloaded from the server
 ---@param callback fun(temp_file_path : string) continuation callback
 function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callback)
 
-  versionspec = versionspec or require('tfvc.options').default_versionspec
+  assert(type(versionspec) == 'string')
+  assert(type(path) == 'string')
 
   ---@type table<tfvc.file_version>
   local cache = M.file_versions or {}
@@ -286,7 +287,7 @@ end
 function M.get_workfold_or_get_cached()
 
   local function try_get_from_cwd()
-    local cwd = vim.uv.cwd()
+    local cwd = assert(vim.uv.cwd())
     cwd = vim.fs.normalize(cwd):lower()
 
     -- find first workfold where the the cwd is under the localPath of that workfold
@@ -371,26 +372,25 @@ function M.close_tfvc_diff_wins()
     local buf_in_win = vim.api.nvim_win_get_buf(win)
     local is_server = vim.b[buf_in_win].is_server_file
 
-    --vim.api.nvim_get_option_value('diff', { win = win })
-    if win ~= cur_win and (is_server or vim.api.nvim_win_get_option(win, 'diff')) then
+    if win ~= cur_win and (is_server or vim.api.nvim_get_option_value('diff', { win = win })) then
       vim.api.nvim_win_close(win, true)
     end
   end
 end
 
 function M.diff_files_inline(left, right)
-  local _, inline_diff = pcall(require, 'unified_diff')
+  local _, inline_diff = pcall(require, 'inline_diff')
   if not inline_diff then
-    vim.print("'unified_diff' could not be loaded", vim.log.levels.WARN)
+    vim.print("'inline_diff' could not be loaded", vim.log.levels.WARN)
     M.diff_files(left, right)
     return
   end
 
   local buf = vim.uri_to_bufnr(vim.uri_from_fname(right))
-  if inline_diff.has_active_unified_diff(buf) then
-    inline_diff.stop_unified(buf)
+  if inline_diff.has_active_inline_diff(buf) then
+    inline_diff.stop_inline(buf)
   else
-    inline_diff.setup_unified_diff(buf, left)
+    inline_diff.setup_inline_diff(buf, left)
   end
 end
 
@@ -434,7 +434,7 @@ function M.tf_compare(opts)
 end
 
 function M.toggle_diff()
-  local was_diff =  vim.api.nvim_win_get_option(0, 'diff')
+  local was_diff =  vim.api.nvim_get_option_value('diff', { win = 0 })
   if vim.b[0].is_server_file then
     local v = require('tfvc.options')
     if vim.b[0].versionspec == v.default_versionspec then
@@ -453,6 +453,7 @@ end
 ---@param files string[] list of file paths
 ---@param versionspec tfvc.versionspec?
 function M.preload_versions_for_files(files, versionspec, force_fresh)
+  versionspec = versionspec or require('tfvc.options').default_versionspec
   for _, file in pairs(files) do
     M.tf_get_version_from_versionspec(file, versionspec, force_fresh, function () end)
   end

@@ -58,7 +58,9 @@ function M.history_bufreadcmd(args)
   local vars = require('tfvc.options')
   local path = args.file:gsub('tfvc:///history/', '')
 
-  if path == '' or path == '.' or path == './' then path = vim.uv.cwd() end
+  if path == '' or path == '.' or path == './' then
+    path = assert(vim.uv.cwd())
+  end
 
   local limit = vars.history_entry_limit
   local cmd = { 'history',  path, '/recursive', '/noprompt', '/stopafter:'..limit, '/format:brief' }

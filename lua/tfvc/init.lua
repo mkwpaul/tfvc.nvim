@@ -172,7 +172,7 @@ M.commands = {
   }
 }
 
-local _, inline_diff = pcall(require, 'unified_diff')
+local _, inline_diff = pcall(require, 'inline_diff')
 if inline_diff then
 
   M.commands.inline_diff = {
@@ -199,8 +199,7 @@ local function path_complete(start)
 
   --tfvc_comp.start = start
   local paren = start
-  local filter = nil
-  local iter = nil
+  local filter, iter = nil, nil
   if start:sub(#start) == '/' then
     iter = vim.fs.dir(start)
   else
@@ -209,29 +208,29 @@ local function path_complete(start)
     iter = vim.fs.dir(paren)
   end
 
-  local entries = {}
-  for current, type in iter do
-    if type == 'file' then
-      table.insert(entries, paren .. current)
-    end
+  -- append '/' for directories
+  local entries = vim.iter(iter):map(function (current, type)
     if type == 'directory' then
-      table.insert(entries, paren .. current .. '/' )
+      return paren .. current .. '/'
+    else
+       return paren .. current
     end
-  end
+  end)
 
+  -- if we have a partial path, filter entires that don't start with the typed beginning
   if filter then
     local prefix = string.lower(paren .. filter)
-    entries = vim.tbl_filter(function (path)
-      local found = string.lower(path):find(prefix, 1, true)
-      return found ~= nil
-    end, entries)
+    entries = entries:filter(function(path, _)
+      return string.lower(path):find(prefix, 1, true) ~= nil
+    end)
   end
 
-  -- we want the path to be parsed as a single argument
-  -- and for that vim's commandline needs spaces escaped with back-slash
-  entries = vim.tbl_map(function (path)
-    return path:gsub(' ', [[\ ]])
-  end, entries)
+  -- escape spaces for the command syntax
+  entries = entries
+    :map(function(path)
+      local subbed, _ = path:gsub(' ', [[\ ]])
+      return subbed
+    end):totable()
 
   -- sort so directories are listed first, and then files
   table.sort(entries, function(a, b)

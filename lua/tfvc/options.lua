@@ -1,30 +1,36 @@
 ---@class tfvc.user_vars class defining all recognized variables that control behavior of this plugin
----@field debug boolean? verbose output for debugging
----@field default_versionspec tfvc.versionspec? versionspec to use with commands when no version_spec is specified, defaults to 'T' which indicates to use the latest version
----@field diff_no_split? boolean if true, then hide the buffer that is compared against, when using tf diff
----@field diff_open_folds? boolean if true, then don't collapse regions without changes, when using tf diff
----@field filter_status_by_cwd boolean? When using tf status, only show changed files under the current working directory
----@field executable_path string? Full path to the TF executable. If not set, the it will be assumed that the tf executable is in the PATH
----@field history_entry_limit number? number of entries to load in history buffers
----@field history_open_cmd? string command to use when navigating to tfvc:/// paths via commands, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
----@field output_encoding string? if specified, use iconv to convert output from tf.exe from the specified encoding to utf-8, value is passed as-is to iconv, so it should be an encoding
+---@field debug boolean verbose output for debugging
+---@field default_versionspec tfvc.versionspec versionspec to use with commands when no version_spec is specified, defaults to 'T' which indicates to use the latest version
+---@field diff_no_split boolean if true, then hide the buffer that is compared against, when using tf diff
+---@field diff_open_folds boolean if true, then don't collapse regions without changes, when using tf diff
+---@field filter_status_by_cwd boolean When using tf status, only show changed files under the current working directory
+---@field executable_path string Full path to the TF executable. If not set, the it will be assumed that the tf executable is in the PATH
+---@field history_entry_limit number number of entries to load in history buffers
+---@field history_open_cmd string command to use when navigating to tfvc:/// paths via commands, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
+---@field output_encoding string if specified, use iconv to convert output from tf.exe from the specified encoding to utf-8, value is passed as-is to iconv, so it should be an encoding
 ---@field version_control_web_url string this should look something like 'http://{host}/tfs/{collection}/{project}/_versionControl'
----@field diff_open_cmd? string command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
----@field blocking? boolean makes commands synchronous, use this when trying to use things like :TF checkout in macros
+---@field blocking boolean makes commands synchronous, use this when trying to use things like :TF checkout in macros
+---@field diff_open_cmd string command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
 
-local variables = {
+--- proxy obj for user-options access,
+--- don't use this to set options
+---@class tfvc.user_vars
+---@diagnostic disable-next-line: missing-fields 
+local M = {}
+
+M.option_definitions = {
   debug = { fallback = false, },
-  default_versionspec = { fallback = 'T', },
-  diff_no_split = { fallback = false, },
+  diff_no_split = { fallback = false,  },
   diff_open_folds = { fallback = false, },
-  executable_path = { fallback = 'TF', },
   filter_status_by_cwd = { fallback = true, },
+  blocking = { fallback = false },
+  default_versionspec = { fallback = 'T', },
+  executable_path = { fallback = 'TF', },
   history_entry_limit = { fallback = 300, },
   history_open_cmd = { fallback = 'e', },
-  output_encoding = { fallback = nil, },
-  version_control_web_url = { fallback = nil, },
   diff_open_cmd = { fallback = 'above split', },
-  blocking = { fallback = false },
+  output_encoding = { fallback = 'UTF-8', },
+  version_control_web_url = { fallback = nil, type = 'string' },
 }
 
 --[[
@@ -57,43 +63,48 @@ Note that the table passed to require('tfvc').setup is just merged into vim.g.tf
 so precedence depends on what value was set last.
 ]]
 
---- proxy obj for user-options access,
---- don't use this to set options
----@type tfvc.user_vars
----@diagnostic disable-next-line: missing-fields 
-local M = {}
+function M.get_option(key)
+  local var = assert(M.option_definitions[key], key .. ' is invalid key for user-vers')
+
+  local opt_type = type(var.fallback) or var.type
+  if opt_type == "nil" then
+    opt_type = assert(var.type)
+  end
+
+  -- direct global tfvc_[key] have precedence over
+  -- values on the vim.g.tfvc object
+  -- so that stuff can be more easily overwritten with :let g:tfvc_
+  local value = nil
+  value = vim.g['tfvc_'..key]
+
+  local function assert_type(v)
+    local valtype = type(v)
+    if valtype ~= opt_type then
+      error(string.format('Option "%s" expects value of type "%s" but provided value was of type "%s"', key, opt_type, valtype))
+    end
+    return v
+  end
+
+  if value ~= nil then
+    return assert_type(value), true
+  end
+
+  local tfObj = vim.g.tfvc
+  if tfObj then
+    value = tfObj[key]
+    if value ~= nil then
+      return assert_type(value), true
+    end
+  end
+
+  assert(var.fallback ~= nil, 'Tried to access option "'..key..'" but no value was provided and option has no fallback')
+  return var.fallback, false
+end
 
 setmetatable(M, {
   __index = function (_, k)
-    local var = variables[k]
-    assert(var, vim.inspect(k) .. " is invalid key for user-vers")
-
-    -- direct global tfvc_[key] have precedence over
-    -- values on the vim.g.tfvc object
-    -- so that stuff can be more easily overwritten with :let g:tfvc_
-    local value = nil
-    value = vim.g['tfvc_'..k]
-
-    if TF then
-      value = TF[k]
-      if value ~= nil then
-        return value
-      end
-    end
-
-    if value ~= nil then
-      return value
-    end
-
-    local tfObj = vim.g.tfvc
-    if tfObj then
-      value = tfObj[k]
-      if value ~= nil then
-        return value
-      end
-    end
-
-    return var.fallback
+    local val = M.get_option(k)
+    return val
   end
 })
 

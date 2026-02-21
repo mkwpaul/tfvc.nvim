@@ -346,7 +346,7 @@ local refresh = {
 
 ---@param target_buf number
 ---@param path_compare_base string
-function M.setup_unified_diff(target_buf, path_compare_base)
+function M.setup_inline_diff(target_buf, path_compare_base)
 
   local target_path = vim.api.nvim_buf_call(target_buf, function()
     return vim.fn.expand('%')
@@ -357,10 +357,8 @@ function M.setup_unified_diff(target_buf, path_compare_base)
   local active_refresher = vim.b[target_buf].unified_diff_augroup_id
   assert(active_refresher == nil, 'cannot setup unified-diffs twice')
 
-  local async = require("unified_diff.async")
   local augroup = vim.api.nvim_create_augroup(refresh.augroup_name, { clear = true })
-
-  local debounced_show_diff = async.debounce(function()
+  local debounced_show_diff = M.debounce(function()
     M.__diff_buf_against_file(target_buf, target_path, path_compare_base)
   end, refresh.debounce_delay)
 
@@ -383,7 +381,7 @@ function M.setup_unified_diff(target_buf, path_compare_base)
   vim.b[target_buf].unified_diff_augroup_id = augroup
 end
 
-function M.stop_unified(buffer)
+function M.stop_inline_diff(buffer)
   local augroup = vim.b[buffer].unified_diff_augroup_id
   assert(augroup, 'cannot stop unified_diff on buffer without active autocommands for ud')
 
@@ -392,6 +390,52 @@ function M.stop_unified(buffer)
   vim.fn.sign_unplace("unified_diff", { buffer = buffer })
 
   vim.b[buffer].unified_diff_augroup_id = nil
+end
+
+--- Creates a debounced version of a function (Trailing Edge).
+---
+--- The debounced function delays invoking `func` until `delay_ms` milliseconds have
+--- elapsed since the last time the debounced function was invoked. Subsequent calls
+--- during the delay period will reset the timer. The function executes only
+--- after the calls have stopped for the specified duration.
+---
+--- @param func function The function to debounce. Will be called with arguments
+---   passed to the debounced function on the trailing edge.
+--- @param delay_ms number The debounce delay in milliseconds. Must be non-negative.
+--- @return function A new function that wraps the original `func` with trailing debounce logic.
+---
+--- @usage
+---   local async = require("utils.async")
+---   local my_update_func = function(arg1) print("Updating:", arg1) end
+---   local debounced_update = async.debounce(my_update_func, 300)
+---
+---   -- Call multiple times rapidly:
+---   debounced_update("first")  -- Does nothing immediately
+---   debounced_update("second") -- Does nothing immediately, resets timer
+---   -- After 300ms pause following the *last* call...
+---   -- "Updating: second" will be printed.
+---
+---@note Return Value: The debounced function itself does not return any value from `func`.
+---@note Handling 'self': If `func` is a method that relies on `self`, you need to ensure `self`
+---       is correctly passed, e.g., by wrapping:
+---       `async.debounce(function(...) obj:method(...) end, delay)`
+function M.debounce(func, delay_ms)
+  assert(type(func) == "function", "Debounce Error: 'func' argument must be a function.")
+  assert(type(delay_ms) == "number" and delay_ms >= 0, "Debounce Error: 'delay_ms' must be a non-negative number.")
+
+  local timer = nil
+
+  return function(...)
+    local args = {...}
+    if timer then
+      vim.uv.timer_stop(timer)
+      timer = nil
+    end
+    timer = vim.defer_fn(function()
+      func(unpack(args))
+      timer = nil
+    end, delay_ms)
+  end
 end
 
 return M

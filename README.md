@@ -23,7 +23,7 @@ It also depends on you having setup an active workspace with `TF.exe workspace`.
 Add this repository with your plugin-manager of choice. Here's Lazy:
 
 ```lua
-  { 'mkwpaul/tfvc.nvim', dependencies = { 'nvim-lua/plenary.nvim', } },
+  { 'mkwpaul/tfvc.nvim' },
 ```
 
 Ensure that the parent directory of the TF.exe is listed in your PATH variable,

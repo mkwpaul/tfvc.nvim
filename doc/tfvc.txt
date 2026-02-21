@@ -1,4 +1,4 @@
-*tfvc.txt*                                        Last change: 2026 January 30
+*tfvc.txt*                                       Last change: 2026 February 18
 
 ==============================================================================
 Table of Contents                                     *tfvc-table-of-contents*
@@ -45,7 +45,7 @@ INSTALLATION & SETUP                               *tfvc-installation-&-setup*
 Add this repository with your plugin-manager of choice. Here's Lazy:
 
 >lua
-      { 'mkwpaul/tfvc.nvim', dependencies = { 'nvim-lua/plenary.nvim', } },
+      { 'mkwpaul/tfvc.nvim' },
 <
 Ensure that the parent directory of the TF.exe is listed in your PATH
 variable, either by appending the location of the executable manually or by
