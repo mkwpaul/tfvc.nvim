@@ -174,13 +174,16 @@ Preloads a specific server version of all files with pending changes.
 
 - `:TF status`
 
-Opens the quickfix list with all checked out files.
-Optional flags: `all`, `cached`, `fresh`, `in_cwd` or their initials
+Opens the quickfix list with checked out files.
+Depending on the value of option `filter_status_by_cwd` only shows files that
+are within the current working directory.
 
-     `in_cwd`: only show changed files under the current working directory. (default)
-     `all`: opposite of `in_cwd` 
-     `fresh` ignore cache for pending changes and query from TF.exe (default)
-     `cached` load pending changes from cache if availible, otherwise query fresh
+Executing the command with a bang (i.e. `TF! status`), will reverse the option
+for that execution.
+
+Alternatively you can specify by providing additional parameter a `all` or `in_cwd` 
+
+e.g. `TF status all`
 
 - `:TF undo`
 

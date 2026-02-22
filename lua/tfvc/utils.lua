@@ -9,34 +9,6 @@ M.pending_changes_last_updated = nil
 ---@type tfvc.workfold[] cached from output or user-provided
 M.workfolds = {}
 
----@returns a generator that yields lines from a string
----@param str string
-local function line_iter(str)
-  local lines = vim.split(str, '\n')
-  local i = 0
-  local iter = {
-    current = function() return lines[i] end,
-    next = function()
-      i = i + 1
-      if i <= #lines then
-        return lines[i]
-      end
-      return nil
-    end,
-  }
-  return iter
-end
-
----@param str string
----@return string
-local function trim(str)
-  if not str then
-    return ''
-  end
-  local rep, _ = string.gsub(str, '^%s*(.-)%s*$', '%1')
-  return rep
-end
-
 ---@param local_path string
 function M.get_local_path_relative(local_path)
   local cwd = vim.fs.normalize(vim.fn.getcwd(0))
@@ -256,20 +228,27 @@ Collection: [url to server]
 ---@param output string
 ---@return tfvc.workfold | nil
 local function parse_tf_workfold(output)
+  local n = 1
   local workfold = {}
-  local iter = line_iter(output)
-  while iter.next() do
-    local line = iter.current()
-    if vim.startswith(line, 'Workspace :') then
-      workfold.workspace = trim(string.sub(line, 12))
+  local lines = vim.split(output, '\n')
+  local function next()
+    n = n + 1
+    return n <= #lines
+  end
+  local line_workspace = 'Workspace :'
+  local line_collection = 'Collection: '
+  while next() do
+    local line = lines[n]
+    if vim.startswith(line, line_workspace) then
+      workfold.workspace = vim.trim(string.sub(line, #line_workspace + 1))
     end
-    if vim.startswith(line, 'Collection:') then
-      workfold.collection = trim(string.sub(line, 11))
+    if vim.startswith(line, line_collection) then
+      workfold.collection = vim.trim(string.sub(line, #line_collection + 1 ))
       -- line after collection is " [ServerPath]: [LocalPath]"
-      if iter.next() then
-        local line_2 = iter.current()
-        workfold.serverPath = trim(string.sub(line_2, 1, string.find(line_2, ':') - 1))
-        workfold.localPath = trim(string.sub(line_2, string.find(line_2, ':') + 2))
+      if next() then
+        local line_2 = lines[n]
+        workfold.serverPath = vim.trim(string.sub(line_2, 1, string.find(line_2, ':') - 1))
+        workfold.localPath = vim.trim(string.sub(line_2, string.find(line_2, ':') + 2))
         workfold.localPath = vim.fs.normalize(workfold.localPath)
       end
     end
@@ -284,43 +263,30 @@ local function parse_tf_workfold(output)
 end
 
 ---@return tfvc.workfold?
-function M.get_workfold_or_get_cached()
+function M.get_active_workfold()
 
   local function try_get_from_cwd()
     local cwd = assert(vim.uv.cwd())
     cwd = vim.fs.normalize(cwd):lower()
-
     -- find first workfold where the the cwd is under the localPath of that workfold
-    for _, workfold in ipairs(M.workfolds) do
+    return vim.iter(M.workfolds):find(function (workfold)
       local localPath = vim.fs.normalize(workfold.localPath)
       localPath = localPath:lower()
-      local index = cwd:find(localPath, 0, true)
-      if index == 1 then
-        return workfold
-      end
-    end
+      return cwd:find(localPath, 0, true) ==1
+    end)
   end
 
   local wf = try_get_from_cwd()
   if wf then return wf end
 
   local job = M.tf_cmd({ 'workfold' }, { suppress_echo = true }, function(obj)
-    if obj.code ~= 0 then
-      vim.schedule(function()
-        vim.notify('Failed to get workfold: ' .. vim.inspect(obj), vim.log.levels.ERROR)
-      end)
-      return
-    end
-
     local workfold = parse_tf_workfold(obj.stdout)
     if not workfold then
-      vim.schedule(function()
-        vim.notify('Failed to get workfold: ' .. vim.inspect(obj), vim.log.levels.ERROR)
-      end)
-      return
+      error('Failed to get workfold: ' .. vim.inspect(obj))
+    else
+      table.insert(M.workfolds, workfold)
+      wf = workfold
     end
-    table.insert(M.workfolds, workfold)
-    wf = workfold
   end)
 
   job:wait(3000)
@@ -331,7 +297,7 @@ end
 ---@param relative boolean
 ---@return string path the mapped path
 function M.server_path_to_local_path(path, relative)
-  local workfold = M.get_workfold_or_get_cached()
+  local workfold = M.get_active_workfold()
   assert(workfold, 'Workfold must be initialized. Try Again.')
   local localpath, count = path:gsub(workfold.serverPath, workfold.localPath)
   assert(count == 1, 'server_path_to_local_path, gsub of serverroot failed')
@@ -343,7 +309,7 @@ end
 
 function M.cmd_open_web_history()
   local v = require 'tfvc.options'
-  local workfold = M.get_workfold_or_get_cached()
+  local workfold = M.get_active_workfold()
   assert(workfold, 'Workfold must be initialized. Try Again.')
   assert(v.version_control_web_url, [[User-Option 'version_control_web_url' must be set for command 'open web history']])
   local file = M.get_local_path('open_web_history')
@@ -463,6 +429,101 @@ function M.get_changeset_web_url(changeset)
   local vars = require('tfvc.options')
   local header = vars.version_control_web_url .. '/changeset/'.. changeset
   return header
+end
+
+-- status
+
+---@param node xmlNode
+---@param changes table<tfvc.pending_change>
+local function iter_xml(node, changes)
+  if node.tag == 'PendingChange' then
+    ---@type tfvc.xmlPendingChange
+    local props = node.attrs
+    local pendingChange = {
+      Change = props.chg or '',
+      Local = vim.fs.normalize(props["local"]),
+      item = props.item,
+      type = props["type"],
+      name = vim.fs.basename(props["local"])
+    }
+    table.insert(changes, pendingChange)
+  end
+
+  if node.children ~= nil then
+    for _, v in pairs(node.children) do
+      iter_xml(v, changes)
+    end
+  end
+end
+
+---@param status_xml string 
+---@return table<tfvc.pending_change>
+local function parse_status_xml(status_xml)
+  local xmlparser = require('tfvc.xmlparser')
+  local doc = xmlparser.parse(status_xml, false)
+  local changes = {}
+  iter_xml(doc, changes)
+  return changes
+end
+
+---@param callback fun(changes:tfvc.pending_change[])
+function M.get_pending_changes_async(callback)
+  M.tf_cmd({ 'status', '/format:xml' }, nil, function(obj)
+    if obj.code ~= 0 then
+      vim.schedule(function()
+        vim.notify('Failed to get pending changes: ' .. vim.inspect(obj), vim.log.levels.ERROR)
+      end)
+      return
+    end
+    local changes = parse_status_xml(obj.stdout)
+    M.pending_changes = changes
+    M.pending_changes_last_updated = os.time()
+    callback(changes)
+  end)
+end
+
+---@param force_fresh boolean 
+---@param callback fun(changes:tfvc.pending_change[])
+function M.do_with_pending_changes(force_fresh, callback)
+  if #M.pending_changes == 0 or force_fresh then
+    M.get_pending_changes_async(callback)
+  else
+    callback(M.pending_changes)
+  end
+end
+
+function M.change_type_to_icons(change)
+  local words = vim.split(change or '', ' ', { plain = true, trimempty = true })
+  local result = {}
+  -- TODO: check if icons are availible / check an option
+  for _, value in pairs(words) do
+    if value == 'Add' then table.insert(result, '+') end
+    if value == 'Edit' then table.insert(result, '✎') end
+    if value == 'Delete' then table.insert(result, '🗑') end
+    if value == 'Encoding' then table.insert(result, '🗎') end
+    if value == 'Rollback' then table.insert(result, '←') end
+  end
+  return table.concat(result, ' ')
+end
+
+---@param pending_changes tfvc.pending_change[] 
+---@param in_cwd boolean 
+function M.load_pending_changes_into_qf(pending_changes, in_cwd)
+  if in_cwd then
+    pending_changes = vim.tbl_filter(function(change)
+      return M.is_within_workspace(change.Local)
+    end, pending_changes)
+  end
+  local qf_entries = vim.tbl_map(function (change)
+    return {
+      filename = change.Local,
+      valid = true,
+      text = M.change_type_to_icons(change.Change) .. ' ' .. change.Change
+    }
+  end, pending_changes)
+
+  vim.fn.setqflist(qf_entries)
+  vim.cmd.copen()
 end
 
 return M

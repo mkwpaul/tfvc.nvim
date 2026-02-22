@@ -1,4 +1,4 @@
-*tfvc.txt*                                       Last change: 2026 February 18
+*tfvc.txt*                                       Last change: 2026 February 21
 
 ==============================================================================
 Table of Contents                                     *tfvc-table-of-contents*
@@ -183,8 +183,17 @@ Opens the history of the current file or directory in a browser. Requires the
 Preloads a specific server version of all files with pending changes.
 
 - `:TF status`
-Opens the quickfix list with all checked out files. Optional flags: `all`,
-`cached`, `fresh`, `in_cwd` or their initials
+Opens the quickfix list with checked out files. Depending on the value of
+option `filter_status_by_cwd` only shows files that are within the current
+working directory.
+
+Executing the command with a bang (i.e. `TF! status`), will reverse the option
+for that execution.
+
+Alternatively you can specify by providing additional parameter a `all` or
+`in_cwd`
+
+e.g. `TF status all`
 
 - `:TF undo`
 Undoes any pending changes in the current file or provided path. Non-blocking

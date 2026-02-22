@@ -116,14 +116,30 @@ M.commands = {
   },
   status = {
     desc = 'Load Status (Pending Changes) into quickfix list',
-    run = function(opts) require('tfvc.status').cmd_status(opts) end,
+    run = function(args)
+      local options = require('tfvc.options')
+      local in_cwd = options.filter_status_by_cwd
+      if args.bang then
+        -- just let bang do the inverse of the current option
+        in_cwd = not in_cwd
+      end
+      for _, arg in pairs(args.fargs) do
+        if arg == 'in_cwd' then in_cwd = true end
+        if arg == 'all' then in_cwd = false end
+      end
+      local fresh = true -- always get status fresh, its' simpler and less error-prone ux
+      local u = require 'tfvc.utils'
+      u.do_with_pending_changes(fresh, vim.schedule_wrap(function (pending_changes)
+          u.load_pending_changes_into_qf(pending_changes, in_cwd)
+      end))
+    end,
   },
   loadDiffs = {
     desc = 'Preload Diffs for changed files',
     run = function (opts)
       local force_fresh = opts.bang
-      local status = require('tfvc.status')
-      status.do_with_pending_changes(force_fresh, vim.schedule_wrap(function(pending_changes)
+      local u = require('tfvc.utils')
+      u.do_with_pending_changes(force_fresh, vim.schedule_wrap(function(pending_changes)
         local local_paths = vim.tbl_map(function(pending_change)
           return pending_change.Local
         end, pending_changes)

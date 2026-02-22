@@ -133,7 +133,7 @@ return M
 ---@class tfvc.server_file : tfvc.file_version
 ---@field bufType 'serverFile'
 
----@class tfvc_local_file
+---@class tfvc.local_file
 ---@field bufType 'localFile'
 ---@field server_path string
 ---@field isServerFile? boolean
@@ -141,4 +141,23 @@ return M
 ---@field pendingChange? tfvc.pending_change
 ---@field file_history? any
 
----@alias tfvc.buf_info tfvc.server_file|tfvc_local_file|nil
+---@class tfvc.xmlPendingChange
+---@field chg string Types of Change One or more of "Edit, Add, Delete, Encoding" separated by spaces
+---@field chgEx string
+---@field ct string
+---@field date string
+---@field enc string
+---@field hash string
+---@field item string
+---@field itemid string
+---@field len string
+---@field local string
+---@field pcid string
+---@field psn string
+---@field pso string
+---@field psod string
+---@field type string
+---@field uhash string
+---@field ver string
+
+---@alias tfvc.buf_info tfvc.server_file|tfvc.local_file
