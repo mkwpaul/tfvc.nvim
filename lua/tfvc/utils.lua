@@ -121,8 +121,24 @@ M.scheme_mappings = {
   end,
 }
 
-function M.to_local_path(uri, buf, command)
-  buf = buf or vim.uri_to_bufnr(uri)
+--- provide either buf or uri, preferably both, Pass buf = 0 if you want the path of the current buffer
+---@param verb string? only used for logging when something goes wrong
+---@param buf number? vim buffer id, falls back to current buffer if not set
+---@param uri string? uri
+---@return string? local_path
+function M.get_local_path(verb, buf, uri)
+  assert(uri or buf, 'must provide either uri or buf.')
+  if buf == 0 then
+    buf = vim.api.nvim_get_current_buf()
+  end
+  if uri and not buf then
+    buf = buf or vim.uri_to_bufnr(uri)
+  elseif not uri and buf then
+    uri = vim.uri_from_bufnr(buf)
+  end
+
+  assert(uri and buf)
+
   for key, value in pairs(M.scheme_mappings) do
     if vim.startswith(uri, key) then
       local mapped = value(buf, uri);
@@ -130,20 +146,12 @@ function M.to_local_path(uri, buf, command)
       return mapped
     end
   end
-  if command then
-    print('Command ' .. command .. 'Invalid for non-file buffers: uri: ' .. uri)
+  if verb then
+    print('Command ' .. verb .. '. Invalid for non-file buffers: uri: ' .. uri)
   end
-  return nil, nil
+  return nil
 end
 
----@param command string? only used for logging when something goes wrong
----@param buf number? vim buffer id, falls back to current buffer if not set
----@return  string?, string? local_path and 'file' or 'directory'
-function M.get_local_path(command, buf)
-  buf = buf or vim.api.nvim_get_current_buf()
-  local uri = vim.uri_from_bufnr(buf)
-  return M.to_local_path(uri, buf, command)
-end
 
 local function char_to_hex(c) return string.format("%%%02X", string.byte(c)) end
 
@@ -312,7 +320,7 @@ function M.cmd_open_web_history()
   local workfold = M.get_active_workfold()
   assert(workfold, 'Workfold must be initialized. Try Again.')
   assert(v.version_control_web_url, [[User-Option 'version_control_web_url' must be set for command 'open web history']])
-  local file = M.get_local_path('open_web_history')
+  local file = M.get_local_path('open_web_history', 0)
   if not file then
     return
   end

@@ -1,28 +1,46 @@
 local M = {}
 
 ---@param args vim.api.keyset.create_user_command.command_args
-local function get_path_from_cmd_args(args)
+---@param verb string name of command to use for logging purposes
+---@param cwd_fallback boolean? whether or not use the cwd as a path if no path can be inferred from the arguments
+local function get_path_from_cmd_args(args, verb, cwd_fallback)
   local u = require 'tfvc.utils'
   local path = nil
   if #args.fargs > 0 then
     path = vim.fn.expand(args.fargs[1])
-    local mapped, local_path = pcall(u.to_local_path, path, nil, 'history')
+    local mapped, local_path = pcall(u.get_local_path, verb, nil, path)
     if mapped then
       path = local_path
     end
   end
   if not path then
-    path = u.get_local_path('history') or '.'
+    path = u.get_local_path(verb, 0)
+    if not path and cwd_fallback then
+      path = '.'
+    end
   end
   return path
 end
 
-local function cmd_from_verb(verb, print_stdout, callback)
-  ---@param opts vim.api.keyset.create_user_command.command_args
-  return function(opts)
-    local args = { 'vc' , verb, get_path_from_cmd_args(opts) }
+---@class tfvc.cmd_from_verb_args
+---@field verb string
+---@field print_stdout? boolean
+---@field callback? function
+
+--- helper function to turn cli verbs into sub-commands
+---@param cmd_opts tfvc.cmd_from_verb_args
+---@return function
+local function cmd_from_verb(cmd_opts)
+
+  ---@param _args vim.api.keyset.create_user_command.command_args
+  return function(_args)
+    local path = get_path_from_cmd_args(_args, cmd_opts.verb)
+    if not path then
+      return
+    end
+    local args = { 'vc' , cmd_opts.verb, path }
+    local job = require('tfvc.utils').tf_cmd(args, { print_stdout = cmd_opts.print_stdout }, cmd_opts.callback)
     local vars = require 'tfvc.options'
-    local job = require('tfvc.utils').tf_cmd(args, { print_stdout = print_stdout } , callback)
     if vars.blocking then
       job:wait(30000)
     end
@@ -49,29 +67,35 @@ M.commands = {
   add = {
     desc = 'Add file to version sontrol',
     complete = true,
-    run = cmd_from_verb('add', false),
+    run = cmd_from_verb { verb = 'add' },
   },
   undo = {
     desc = 'Undo changes in file. Deliberately does not work with directories.',
     complete = true,
-    run = cmd_from_verb('undo', false, vim.schedule_wrap(function () vim.cmd 'edit!' end)),
+    run = cmd_from_verb {
+      verb = 'undo',
+      callback = vim.schedule_wrap(function () vim.cmd 'edit!' end)
+    },
   },
   delete = {
     desc = 'Delete current file',
     complete = true,
-    run = cmd_from_verb('delete', true),
+    run = cmd_from_verb { verb = 'delete', print_stdout = true },
   },
   info = {
     desc = 'Show info about current file',
     complete = true,
-    run = cmd_from_verb('info', true),
+    run = cmd_from_verb { verb = 'info', print_stdout = true },
   },
   checkout = {
     desc = 'Checkout file for editing. Deliberately does not work with directories.',
     complete = true,
-    run = cmd_from_verb('checkout', false, vim.schedule_wrap(function ()
-      vim.cmd 'set noreadonly'
-    end))
+    run = cmd_from_verb {
+      verb = 'checkout',
+      callback = vim.schedule_wrap(function ()
+        vim.cmd 'set noreadonly'
+      end)
+    }
   },
   checkoutModfiedFiles = {
     desc = 'Checkout all files that 1. are readonly (assumed to be not-checked-out) and 2. have unsaved changes',
@@ -161,7 +185,7 @@ M.commands = {
     complete = true,
     run = function()
       local u = require('tfvc.utils')
-      local path = u.get_local_path('rename')
+      local path = u.get_local_path('rename', 0)
       if not path then return end
       local new_path = vim.fn.input {
         prompt = 'Enter new Filename: ',
@@ -182,7 +206,7 @@ M.commands = {
     complete = true,
     run = function (args)
       local v = require('tfvc.options')
-      local path = get_path_from_cmd_args(args)
+      local path = get_path_from_cmd_args(args, 'history', true)
       vim.cmd(v.history_open_cmd .. ' tfvc:///history/'.. path)
     end
   }
@@ -194,7 +218,7 @@ if inline_diff then
   M.commands.inline_diff = {
     desc = 'Experimental: Compare local file to latest server version, (depends on diff executable in PATH)',
     run = function (args)
-      local path = get_path_from_cmd_args(args)
+      local path = get_path_from_cmd_args(args, 'inline_diff')
       local u = require('tfvc.utils')
       u.tf_get_version_from_versionspec(path, 'T', false, vim.schedule_wrap(function(server_file)
         u.diff_files_inline(server_file, path)
