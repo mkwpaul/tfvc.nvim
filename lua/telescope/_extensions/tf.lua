@@ -1,12 +1,10 @@
 local telescope = require 'telescope'
 
----@param in_cwd boolean filter pending changes to only those within the current workspace
 ---@param pending_changes table<tfvc.pending_change>
 local function show_telescope_finder_impl(pending_changes, opts)
 
   local finders = require "telescope.finders"
   local conf = require("telescope.config").values
-  local tfvc_status = require 'tfvc.status'
   local tfvc_opts = require ('tfvc.options')
   local tfvc_utils = require 'tfvc.utils'
 
@@ -20,7 +18,7 @@ local function show_telescope_finder_impl(pending_changes, opts)
   ---@param entry tfvc.pending_change
   local function entry_maker(entry)
     local path = tfvc_utils.get_local_path_relative(entry.Local)
-    local display = path .. " " .. tfvc_status.change_type_to_icons(entry.Change)
+    local display = path .. " " .. tfvc_utils.change_type_to_icons(entry.Change)
     return {
       value = entry,
       display = display,
@@ -62,8 +60,8 @@ end
 
 ---@param opts vim.api.keyset.create_user_command.command_args
 local function cmd_show_telescope_finder(opts)
-  local tfvc_status = require 'tfvc.status'
-  tfvc_status.do_with_pending_changes(true, function (pending_changes)
+  local tfvc = require 'tfvc.utils'
+  tfvc.do_with_pending_changes(true, function (pending_changes)
     vim.schedule(function()
       show_telescope_finder_impl(pending_changes, opts)
     end)
