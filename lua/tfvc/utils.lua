@@ -32,10 +32,48 @@ function M.is_within_workspace(full_path)
   return vim.startswith(full_path, cwd)
 end
 
+function M.get_cache_path(subfolder, args)
+  local cache_root = vim.fn.stdpath('cache')
+  local args_joined = table.concat(args, '_');
+  local url_encoded = M.url_encode(args_joined)
+  local result_path = vim.fs.joinpath(cache_root, 'tfvc', subfolder, url_encoded)
+  return result_path
+end
+
+local function read_file(file)
+  local f = assert(io.open(file, "rb"))
+  local content = f:read("*all")
+  f:close()
+  return content
+end
+
+local function write_file(file, contents)
+  assert(file, 'argument file is nil')
+  assert(contents, 'argument contents is nil')
+
+  local dir = vim.fs.dirname(file)
+  if not vim.uv.fs_stat(dir) then
+    vim.fn.mkdir(dir)
+  end
+
+  --
+  -- w is "write mode", but write mode is TEXT write mode,
+  -- which, on windows, replaces all \n characters with \r\n
+  -- our file-contents already have \r\n line breaks
+  -- so we end up with \r\r\n line breaks...
+  --
+  -- hence why we're using 'wb' (binary write mode)
+  -- because it disables that crap.
+  local f = assert(io.open(file, "wb"))
+  f:write(contents)
+  f:close()
+end
+
 ---@class tfvc.tf_cmd_opts
 ---@field print_stdout boolean? should output be printed in messages?
 ---@field suppress_echo boolean? should command that was ran not be printed?
 ---@field return_stderr_on_failure boolean? should callback be called despite non-zero exit-code?
+---@field memoize boolean? can output be cached, and subsequent calls be served by just retrieving the cached data?
 ---@field debug boolean? print full trace 
 
 --- calls TF.exe with the specified arguments
@@ -43,8 +81,17 @@ end
 ---@param opts tfvc.tf_cmd_opts?
 ---@param callback fun(obj: vim.SystemCompleted)?
 function M.tf_cmd(command, opts, callback)
-
   opts = opts or {}
+
+  if opts.memoize then
+    assert(callback, 'memoization is useless if you do not use the output')
+    local path = M.get_cache_path('cmd', command)
+    if path and vim.uv.fs_stat(path) then
+      callback { stdout = read_file(path), signal = 0, code = 0, stderr = '', }
+      return
+    end
+  end
+
   local v = require 'tfvc.options'
   table.insert(command, 1, v.executable_path)
   local command_string = table.concat(command, ' ')
@@ -95,6 +142,14 @@ function M.tf_cmd(command, opts, callback)
           code = obj.code,
           signal = obj.signal
         }
+      end
+
+      if opts.memoize then
+        vim.schedule(function ()
+          table.remove(command, 1)
+          local path = M.get_cache_path('cmd', command)
+          write_file(path, obj.stdout)
+        end)
       end
       callback(obj)
     end
@@ -152,31 +207,34 @@ function M.get_local_path(verb, buf, uri)
   return nil
 end
 
-
-local function char_to_hex(c) return string.format("%%%02X", string.byte(c)) end
+function M.char_to_hex(c) return string.format("%%%02X", string.byte(c)) end
 
 ---@param url string?
 ---@return string?
-local function url_encode(url)
+function M.url_encode(url)
   if url == nil then
     return
   end
   url = url:gsub("\n", "\r\n")
-  url = url:gsub("([^%w ])", char_to_hex)
+  url = url:gsub("([^%w ])", M.char_to_hex)
   url = url:gsub(" ", "+")
   return url
 end
 
+---@param path string tfvc server path
 ---@param versionspec tfvc.versionspec
----@param file string
----@return string|nil server_file or null
-local function get_cached_file_version(versionspec, file)
-  for _, value in pairs(M.file_versions or {}) do
-    if (value.versionspec == versionspec and file == value.local_file) then
-      return value.server_file
-    end
+function M.get_file_cache_path(path, versionspec)
+  if versionspec == 'T' then
+    return nil
   end
-  return nil
+  if path:sub(1,1) ~= '$' then
+    path = M.local_path_to_server_path(path)
+  end
+
+  local cache_root = vim.fn.stdpath('cache')
+  local url_encoded = M.url_encode(versionspec) .. '___' .. M.url_encode(path)
+  local result_path = vim.fs.joinpath(cache_root, 'tfvc', 'server_files', url_encoded)
+  return result_path
 end
 
 ---@param path string path to the file to get the version from
@@ -188,20 +246,29 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
   assert(type(versionspec) == 'string')
   assert(type(path) == 'string')
 
-  ---@type table<tfvc.file_version>
-  local cache = M.file_versions or {}
+  local cache = M.file_versions
+
   if not force_fresh then
-    ---@diagnostic disable-next-line: param-type-mismatch
-    local tmp_file = get_cached_file_version(versionspec, path)
-    if tmp_file then
-      callback(tmp_file)
-      return
+    for _, value in pairs(cache) do
+      if (value.versionspec == versionspec and path == value.local_file) then
+        callback(value.server_file)
+        return
+      end
     end
   end
 
-  local temp = vim.fn.tempname()
+  local temp = M.get_file_cache_path(path, versionspec)
+  if temp and vim.uv.fs_stat(temp) then
+    vim.print('got file from cache. avoided fetch from server')
+    callback(temp)
+    return
+  end
+
+  temp = temp or vim.fn.tempname()
+  local cmd_opts = { suppress_echo = true, }
+
   local cmd = { 'vc', 'view', '/version:' .. versionspec, path, '/output:' .. temp }
-  M.tf_cmd(cmd, { suppress_echo = true }, vim.schedule_wrap(function(obj)
+  M.tf_cmd(cmd, cmd_opts , vim.schedule_wrap(function(obj)
     if obj.code == 0 then
       if obj.stdout then
         print(obj.stdout)
@@ -215,7 +282,7 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
 
       -- remove existing cache entry if any
       for i, value in ipairs(cache) do
-        if value.local_file == cache_entry.local_file then
+        if value.versionspec == versionspec and path == value.local_file then
           table.remove(cache, i)
           break
         end
@@ -270,18 +337,20 @@ local function parse_tf_workfold(output)
   return workfold
 end
 
----@return tfvc.workfold?
+---@return tfvc.workfold
 function M.get_active_workfold()
-
+  local options = require 'tfvc.options'
   local function try_get_from_cwd()
     local cwd = assert(vim.uv.cwd())
     cwd = vim.fs.normalize(cwd):lower()
-    -- find first workfold where the the cwd is under the localPath of that workfold
-    return vim.iter(M.workfolds):find(function (workfold)
+    local function find_wf(workfold)
       local localPath = vim.fs.normalize(workfold.localPath)
       localPath = localPath:lower()
       return cwd:find(localPath, 0, true) ==1
-    end)
+    end
+    return
+      vim.iter(options.workfolds):find(find_wf) or
+      vim.iter(M.workfolds):find(find_wf)
   end
 
   local wf = try_get_from_cwd()
@@ -301,16 +370,41 @@ function M.get_active_workfold()
   return wf
 end
 
----@param path string
+-- NOTE:
+-- at this point it might be worth it to have a centralized 'path' type
+-- from which all the different forms can be derived on-demand,
+-- instead of passing different forms of paths (relative-local, absolute-local, server-path, normalized, file-uri)
+-- everywhere and having to ensure that the different path-forms aren't mixed up
+--
+
+---@param server_path string
 ---@param relative boolean
 ---@return string path the mapped path
-function M.server_path_to_local_path(path, relative)
+function M.server_path_to_local_path(server_path, relative)
   local workfold = M.get_active_workfold()
-  assert(workfold, 'Workfold must be initialized. Try Again.')
-  local localpath, count = path:gsub(workfold.serverPath, workfold.localPath)
-  assert(count == 1, 'server_path_to_local_path, gsub of serverroot failed')
+  local localpath, count = server_path:gsub(workfold.serverPath, workfold.localPath)
+  if count ~= 1 then
+    local data = { input_path = server_path, workfold = workfold }
+    error('server_path_to_local_path, gsub of serverroot failed: ' .. vim.inspect(data), vim.log.levels.ERROR)
+  end
   if relative then
     localpath = M.get_local_path_relative(localpath)
+  end
+  return localpath
+end
+
+---@param path string
+---@return string path the mapped path
+function M.local_path_to_server_path(path)
+  assert(path)
+  assert(path:sub(1,1) ~= '$', 'path must not be a tfvc server-path')
+
+  local workfold = M.get_active_workfold()
+  local rooted_path = vim.fs.abspath(path)
+  local localpath, count = rooted_path:gsub(workfold.localPath, workfold.serverPath)
+  if count ~= 1 then
+    local data = { rooted_path = rooted_path, workfold = workfold }
+    error('server_path_to_local_path, gsub of serverroot failed: ' .. vim.inspect(data), vim.log.levels.ERROR)
   end
   return localpath
 end
@@ -327,7 +421,7 @@ function M.cmd_open_web_history()
 
   local serverPath, subcount = file:gsub(workfold.localPath, workfold.serverPath)
   assert(subcount == 1, 'mapping from local path to server path failed. This is expected when trying to map a file that\'s not part of the tfvc repository.')
-  local escapedServerPath = url_encode(serverPath) or ''
+  local escapedServerPath = M.url_encode(serverPath) or ''
   escapedServerPath = escapedServerPath:gsub('%%2E', '.')
 
   local full_url = v.version_control_web_url .. '/?path=' .. escapedServerPath .. '&_a=history'

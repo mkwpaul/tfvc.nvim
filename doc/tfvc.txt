@@ -1,4 +1,4 @@
-*tfvc.txt*                                       Last change: 2026 February 21
+*tfvc.txt*                                       Last change: 2026 February 22
 
 ==============================================================================
 Table of Contents                                     *tfvc-table-of-contents*
@@ -11,6 +11,7 @@ Keybinds ..................................................... |tfvc-keybinds|
 Versionspec ............................................... |tfvc-versionspec|
 History Buffer Keymaps ......................... |tfvc-history-buffer-keymaps|
 Changeset Buffer Keymaps ..................... |tfvc-changeset-buffer-keymaps|
+Limitations ............................................... |tfvc-limitations|
 
 ==============================================================================
 TFVC.NVIM                                                     *tfvc-tfvc.nvim*
@@ -274,9 +275,10 @@ because it has been renamed or deleted.
 HISTORY BUFFER KEYMAPS                           *tfvc-history-buffer-keymaps*
 
 >
-    <CR>  Open the changeset of the current line
-    dd    Open the changeset of the current line
-    gx    Open the changeset in the webclient
+    <CR>          Open the changeset of the current line
+    dd            Open the changeset of the current line
+    gx            Open the changeset in the webclient
+    <leader>te    Open the local path of the file or history
     
     # the remaining are only availible in file-histories, not directory-histories
     gf    Open the changset-version of file
@@ -295,6 +297,12 @@ CHANGESET BUFFER KEYMAPS                       *tfvc-changeset-buffer-keymaps*
     dt    Compare changed file with latest server version
     gf    View file version
 <
+
+                                                                              
+LIMITATIONS                                                 *tfvc-limitations*
+
+This plugin currently assumes a case-insensitive file-system.
+
 
 ==============================================================================
 QUESTIONS & ANSWERS                                 *tfvc-questions-&-answers*

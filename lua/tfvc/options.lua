@@ -11,6 +11,7 @@
 ---@field version_control_web_url string this should look something like 'http://{host}/tfs/{collection}/{project}/_versionControl'
 ---@field blocking boolean makes commands synchronous, use this when trying to use things like :TF checkout in macros
 ---@field diff_open_cmd string command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
+---@field workfolds tfvc.workfold[] command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
 
 --- proxy obj for user-options access,
 --- don't use this to set options
@@ -31,6 +32,7 @@ M.option_definitions = {
   diff_open_cmd = { fallback = 'above split', },
   output_encoding = { fallback = 'UTF-8', },
   version_control_web_url = { fallback = nil, type = 'string' },
+  workfolds = { fallback = {}, type = 'table' },
 }
 
 --[[

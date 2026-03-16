@@ -1,6 +1,34 @@
 --- implements reading logic and keyhandling for custom tfvc:/// buffers
 local M = {}
 
+function M.set_tfvc_buf_opts(buf, delete)
+  local bufOpt = { buf = buf }
+  vim.api.nvim_set_option_value('buftype', 'nofile', bufOpt)
+  vim.api.nvim_set_option_value('swapfile', false, bufOpt)
+  vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+  vim.api.nvim_set_option_value('modified', false, bufOpt)
+  if delete then
+    -- delete to clean up after ourselves...
+    -- debatable whether this is needed or not
+    -- but we're caching the files for changesets and server-files
+    -- anyway so reloading them is fast anyway.
+    vim.api.nvim_set_option_value('bufhidden', 'delete', bufOpt)
+  end
+end
+
+vim.api.nvim_create_autocmd('BufEnter', {
+  pattern = 'tfvc:///*',
+  callback = function (args)
+
+    --
+    -- unlist buffers to not clutter the buffer list
+    --
+    -- 'buflisted' is reset each time a buffer is opened with :edit (and similar commands)
+    -- therefore we need to unlist our buffers everytime we enter them
+    vim.api.nvim_set_option_value('buflisted', false, { buf = args.buf })
+  end,
+})
+
 --- tries to read the changeset number from the current line,
 --- when called during visual mode, returns both the changeset numbers of the ends of the selection
 --- returns nil (or nil, nil) if the corresponding line has no changeset number
@@ -50,11 +78,6 @@ function M.history_bufreadcmd(args)
   local buf = args.buf
   local bufOpt = { buf = buf }
 
-  -- tell neovim that this buffer is now read-only and modifiable by us
-  vim.api.nvim_set_option_value('modifiable', true, bufOpt)
-  vim.api.nvim_set_option_value('buftype', 'nofile', bufOpt)
-  vim.api.nvim_set_option_value('swapfile', false, bufOpt)
-
   local vars = require('tfvc.options')
   local path = args.file:gsub('tfvc:///history/', '')
 
@@ -81,8 +104,8 @@ function M.history_bufreadcmd(args)
     local lines = vim.split(obj.stdout or obj.stderr, '\r\n')
     vim.list_extend(buffer_contents, lines)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, buffer_contents)
-    vim.api.nvim_set_option_value('modifiable', false, bufOpt)
-    vim.api.nvim_set_option_value('modified', false, bufOpt)
+
+    M.set_tfvc_buf_opts(buf)
 
     -- move cursor to first changed file
     vim.api.nvim_buf_call(buf, function()
@@ -125,6 +148,8 @@ function M.history_bufreadcmd(args)
     vim.keymap.set('n', 'gx', open_cs_in_web, keymapOpt)
     vim.keymap.set('n', 'dd', open_cs, keymapOpt)
     vim.keymap.set('n', '<CR>', open_cs, keymapOpt)
+
+    vim.keymap.set('n', '<leader>te', '<cmd>e '.. path .. '<CR>', keymapOpt)
     if fsinfo.type == 'file' then
       vim.keymap.set('n', 'gf', view_cs_file_version, keymapOpt)
       vim.keymap.set('n', 'dl', compare_with_local, keymapOpt)
@@ -138,16 +163,19 @@ function M.changeset_bufreadcmd(args)
   local buf = args.buf
   local bufOpt = { buf = buf }
 
-  -- tell neovim that this buffer is now read-only and modifiable by us
-  vim.api.nvim_set_option_value('modifiable', true, bufOpt)
-  vim.api.nvim_set_option_value('swapfile', false, bufOpt)
-  vim.api.nvim_set_option_value('buftype', 'nofile', bufOpt)
-
   local cs = args.file:gsub('tfvc:///changeset/', '')
   local cmd = { 'changeset', cs, '/noprompt',  }
 
+  ---@type tfvc.tf_cmd_opts
+  local tf_cmd_opts = {
+    suppress_echo = true,
+    return_stderr_on_failure = true,
+    memoize = true,
+  }
+
   local u = require('tfvc.utils')
   u.tf_cmd(cmd, tf_cmd_opts, vim.schedule_wrap(function(obj)
+
     -- Replace buffer content with command output
     vim.api.nvim_set_option_value('filetype', 'tf_changeset', bufOpt)
     vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
@@ -158,12 +186,11 @@ function M.changeset_bufreadcmd(args)
       '# Help: g?',
     }
 
-    local lines = vim.split(obj.stdout or obj.stderr, '\r\n')
+    local lines = vim.split(assert(obj.stdout or obj.stderr), '\r\n', { plain = true })
     table.remove(lines, 1) -- remove first line "Changeset: 144139" we already have a line like that in our header
     vim.list_extend(buffer_content, lines)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, buffer_content)
-    vim.api.nvim_set_option_value('modifiable', false, bufOpt)
-    vim.api.nvim_set_option_value('modified', false, bufOpt)
+    M.set_tfvc_buf_opts(buf, true)
 
     -- move cursor to first changed file
     vim.api.nvim_buf_call(buf, function()
@@ -216,12 +243,6 @@ end
 
 function M.files_bufreadcmd(args)
   local buf = args.buf
-  local bufOpt = { buf = buf }
-
-  vim.api.nvim_set_option_value('buftype', 'nofile', bufOpt)
-  vim.api.nvim_set_option_value('modifiable', true, bufOpt)
-  vim.api.nvim_set_option_value('swapfile', false, bufOpt)
-
   local path = args.file:gsub('tfvc:///files/', '')
   local versionspec = 'T'
   local idx = path:find('/', 0, true)
@@ -258,8 +279,7 @@ function M.files_bufreadcmd(args)
 
       -- must detect filetype before setting filetype
       vim.cmd [[ filetype detect ]]
-      vim.api.nvim_set_option_value('modifiable', false, bufOpt)
-      vim.api.nvim_set_option_value('modified', false, bufOpt)
+      M.set_tfvc_buf_opts(buf, true)
 
       -- keymaps
       local cs = nil

@@ -258,9 +258,10 @@ because it has been renamed or deleted.
 
 ### History Buffer Keymaps
 ```
-<CR>  Open the changeset of the current line
-dd    Open the changeset of the current line
-gx    Open the changeset in the webclient
+<CR>          Open the changeset of the current line
+dd            Open the changeset of the current line
+gx            Open the changeset in the webclient
+<leader>te    Open the local path of the file or history
 
 # the remaining are only availible in file-histories, not directory-histories
 gf    Open the changset-version of file
@@ -277,6 +278,10 @@ dl    Compare changed file with local version
 dt    Compare changed file with latest server version
 gf    View file version
 ```
+
+### Limitations
+
+This plugin currently assumes a case-insensitive file-system.
 
 # Questions & Answers
 
