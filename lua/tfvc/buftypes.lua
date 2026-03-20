@@ -77,6 +77,7 @@ local tf_cmd_opts = {
 function M.history_bufreadcmd(args)
   local buf = args.buf
   local bufOpt = { buf = buf }
+  vim.api.nvim_set_option_value('modifiable', true, bufOpt)
 
   local vars = require('tfvc.options')
   local path = args.file:gsub('tfvc:///history/', '')
@@ -88,33 +89,60 @@ function M.history_bufreadcmd(args)
   local limit = vars.history_entry_limit
   local cmd = { 'history',  path, '/recursive', '/noprompt', '/stopafter:'..limit, '/format:brief' }
   local u = require('tfvc.utils')
-  u.tf_cmd(cmd, tf_cmd_opts, vim.schedule_wrap(function(obj)
+
+  local fsinfo =  vim.uv.fs_stat(path) or { type = 'unknown' }
+
+  ---@type string|nil
+  local continue_at = nil
+
+  local __load_more_prompt = '<C-l> to load more history'
+  local buffer_contents = {
+    '# TFVC-History (' .. fsinfo.type ..')',
+    '# Local-Path: ' .. path,
+    "# Help: g?",
+    __load_more_prompt
+  }
+
+  local function render_page(obj, remove_header)
+    local lines = vim.split(obj.stdout or obj.stderr, '\r\n')
+    table.remove(lines, #lines) -- removes last blank line
+    if remove_header then
+      table.remove(lines, 1) -- removes column headers
+      table.remove(lines, 1) -- removes separator line
+      table.remove(lines, 1) -- removes first entry, which we already have
+    end
+
+    table.remove(buffer_contents, #buffer_contents) -- removes load more prompt
+    vim.list_extend(buffer_contents, lines) -- adds newly fetched history
+
+    if #lines > (vars.history_entry_limit - 5) then
+      continue_at = lines[#lines]:gmatch('%d+')()
+      buffer_contents[#buffer_contents+1] = __load_more_prompt
+    else
+      continue_at = nil
+    end
+    vim.api.nvim_set_option_value('modifiable', true, bufOpt)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, buffer_contents)
+    vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+  end
+
+  local _cmd = vim.tbl_extend('error', cmd, {})
+  u.tf_cmd(_cmd, tf_cmd_opts, vim.schedule_wrap(function(obj)
     -- Replace buffer content with command output
     vim.api.nvim_set_option_value('filetype', 'tf_history', bufOpt)
     vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
-    local fsinfo =  vim.uv.fs_stat(path) or { type = 'unknown' }
-
-    local buffer_contents = {
-      '# TFVC-History (' .. fsinfo.type ..')',
-      '# Local-Path: ' .. path,
-      "# Help: g?",
-    }
-
-    local preamble_length = #buffer_contents
-    local lines = vim.split(obj.stdout or obj.stderr, '\r\n')
-    vim.list_extend(buffer_contents, lines)
-    vim.api.nvim_buf_set_lines(buf, 0, -1, false, buffer_contents)
 
     M.set_tfvc_buf_opts(buf)
+    render_page(obj, false)
 
     -- move cursor to first changed file
     vim.api.nvim_buf_call(buf, function()
-      local goto_content = ':' .. (preamble_length + 3) -- 3 lines of tf.exe output header
+      local goto_content = ':' .. (6)
       vim.cmd(goto_content)
     end)
 
     --- keymaps
-
+    ---
     ---@param cb fun(cs1:string,cs2:string?)
     ---@return fun() function
     local function with_cs_do(cb)
@@ -143,18 +171,32 @@ function M.history_bufreadcmd(args)
       vim.ui.open(u.get_changeset_web_url(cs1));
     end)
 
-    local keymapOpt = { buffer = buf }
-    vim.keymap.set('n', 'g?', '<cmd>help tfvc-history-buffer-keymaps<CR>' , keymapOpt)
-    vim.keymap.set('n', 'gx', open_cs_in_web, keymapOpt)
-    vim.keymap.set('n', 'dd', open_cs, keymapOpt)
-    vim.keymap.set('n', '<CR>', open_cs, keymapOpt)
+    local function load_more()
+      if not continue_at then
+        print('no more to load')
+        return
+      end
+      local cmd_load_more = { unpack(cmd) }
+      cmd_load_more[#cmd_load_more+1] = '/v:' .. continue_at
+      u.tf_cmd(cmd_load_more, tf_cmd_opts, vim.schedule_wrap(function(obj2)
+        render_page(obj2, true)
+      end))
+    end
 
-    vim.keymap.set('n', '<leader>te', '<cmd>e '.. path .. '<CR>', keymapOpt)
+    local map = vim.keymap.set
+    local keymapOpt = { buffer = buf }
+    map('n', 'g?', '<cmd>help tfvc-history-buffer-keymaps<CR>' , keymapOpt)
+    map('n', 'gx', open_cs_in_web, keymapOpt)
+    map('n', 'dd', open_cs, keymapOpt)
+    map('n', '<CR>', open_cs, keymapOpt)
+    map('n', '<C-l>', load_more, keymapOpt)
+
+    map('n', '<leader>te', '<cmd>e '.. path .. '<CR>', keymapOpt)
     if fsinfo.type == 'file' then
-      vim.keymap.set('n', 'gf', view_cs_file_version, keymapOpt)
-      vim.keymap.set('n', 'dl', compare_with_local, keymapOpt)
-      vim.keymap.set('v', 'dd', comp_via_visual, keymapOpt)
-      vim.keymap.set('v', '<CR>', comp_via_visual, keymapOpt)
+      map('n', 'gf', view_cs_file_version, keymapOpt)
+      map('n', 'dl', compare_with_local, keymapOpt)
+      map('v', 'dd', comp_via_visual, keymapOpt)
+      map('v', '<CR>', comp_via_visual, keymapOpt)
     end
   end))
 end

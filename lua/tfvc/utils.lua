@@ -92,6 +92,7 @@ function M.tf_cmd(command, opts, callback)
     end
   end
 
+
   local v = require 'tfvc.options'
   table.insert(command, 1, v.executable_path)
   local command_string = table.concat(command, ' ')
