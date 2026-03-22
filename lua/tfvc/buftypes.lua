@@ -77,15 +77,23 @@ local tf_cmd_opts = {
 function M.history_bufreadcmd(args)
   local buf = args.buf
   local bufOpt = { buf = buf }
-  vim.api.nvim_set_option_value('modifiable', true, bufOpt)
-
   local vars = require('tfvc.options')
   local path = args.file:gsub('tfvc:///history/', '')
-
   if path == '' or path == '.' or path == './' then
     path = assert(vim.uv.cwd())
   end
 
+  local normalized = vim.fs.normalize(path)
+  if normalized ~= path then
+    vim.schedule(function ()
+      vim.print('redirected to normalized: ' .. normalized)
+      vim.cmd.edit('tfvc:///history/'..normalized)
+    end)
+    vim.api.nvim_buf_delete(args.buf, { force = true })
+    return
+  end
+
+  vim.api.nvim_set_option_value('modifiable', true, bufOpt)
   local limit = vars.history_entry_limit
   local cmd = { 'history',  path, '/recursive', '/noprompt', '/stopafter:'..limit, '/format:brief' }
   local u = require('tfvc.utils')

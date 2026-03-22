@@ -134,11 +134,37 @@ M.commands = {
       require('tfvc.utils').tf_compare({ versionspec = spec, })
     end
   },
+  status = {
+    desc = 'Show local changes (within cd) in interactive buffer',
+    run = function()
+      -- currently too lazy to do this in lua,
+      -- for once, vimscript seems much more practical for this kind of job
+      -- if and when I'll add more interactivity and output-postprocessing,
+      -- then I'll refactor this.
+      -- for now, the conciseness is a feature :)
+      vim.cmd [[
+        new
+        read!tf diff . /Format:Unified /recursive /ignorecase /ignorespace /noprompt 2>NUL
+        set ft=diff
+        syn match tfSeparator    /==============\+/ conceal
+        setlocal foldmethod=marker
+        setlocal foldmarker=---,=======================================
+        setlocal concealcursor=nv
+        setlocal conceallevel=2
+        setlocal nomodifiable
+        setlocal nomodified
+        setlocal noswapfile
+        setlocal buftype=nofile
+        map <buffer> < zc
+        map <buffer> > zo
+      ]]
+    end
+  },
   openWebHistory = {
     desc = 'Open Web History for current File/Directory',
     run = function() require('tfvc.utils').cmd_open_web_history() end,
   },
-  status = {
+  QFstatus = {
     desc = 'Load Status (Pending Changes) into quickfix list',
     run = function(args)
       local options = require('tfvc.options')
