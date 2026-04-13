@@ -1,6 +1,7 @@
+---@module 'tfvc.types'
 local M = {}
 
----@type table<tfvc.file_version>
+---@type tfvc.file_version[]
 M.file_versions = {}
 ---@type table<tfvc.pending_change>
 M.pending_changes = {}
@@ -69,13 +70,6 @@ local function write_file(file, contents)
   f:close()
 end
 
----@class tfvc.tf_cmd_opts
----@field print_stdout boolean? should output be printed in messages?
----@field suppress_echo boolean? should command that was ran not be printed?
----@field return_stderr_on_failure boolean? should callback be called despite non-zero exit-code?
----@field memoize boolean? can output be cached, and subsequent calls be served by just retrieving the cached data?
----@field debug boolean? print full trace 
-
 --- calls TF.exe with the specified arguments
 ---@param command string[] arguments to pass to TF.exe
 ---@param opts tfvc.tf_cmd_opts?
@@ -91,7 +85,6 @@ function M.tf_cmd(command, opts, callback)
       return
     end
   end
-
 
   local v = require 'tfvc.options'
   table.insert(command, 1, v.executable_path)

@@ -47,11 +47,6 @@ local function cmd_from_verb(cmd_opts)
   end
 end
 
----@class tfvc.subcommand
----@field desc string
----@field complete nil|boolean|function
----@field run fun(opts: vim.api.keyset.create_user_command.command_args)
-
 --- Commands like checkout, delete or undo currently don't properly work with directories.
 --- We would need to pass '/recursive' to TF.exe so that the whole directory can be acted on.
 --- On the other hand, checking out, deleting or undoing entire directories could be pretty dangerous.
@@ -62,7 +57,7 @@ end
 --- It's not something that needs to be done very often
 --- and can be easily accomplished by just using the command line tool directly.
 
----@type table<string,tfvc.subcommand>
+---@type table<string, tfvc.subcommand>
 M.commands = {
   add = {
     desc = 'Add file to version sontrol',

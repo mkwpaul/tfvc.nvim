@@ -1,0 +1,134 @@
+---@meta types
+error('Cannot require a meta file')
+
+---class defining all recognized variables that control behavior of this plugin
+---@class tfvc.user_vars
+---
+---verbose output for debugging
+---@field debug boolean
+---
+---versionspec to use with commands when no version_spec is specified, defaults to 'T' which indicates to use the latest version
+---@field default_versionspec tfvc.versionspec
+---
+---if true, then hide the buffer that is compared against, when using tf diff
+---@field diff_no_split boolean
+---
+---if true, then don't collapse regions without changes, when using tf diff
+---@field diff_open_folds boolean
+---
+---When using tf status, only show changed files under the current working directory
+---@field filter_status_by_cwd boolean
+---
+---Full path to the TF executable. If not set, the it will be assumed that the tf executable is in the PATH
+---@field executable_path string
+---
+---number of entries to load in history buffers
+---@field history_entry_limit number
+---
+---command to use when navigating to tfvc:/// paths via commands, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
+---@field history_open_cmd string
+---
+---if specified, use iconv to convert output from tf.exe from the specified encoding to utf-8, value is passed as-is to iconv, so it should be an encoding
+---@field output_encoding string
+---
+---this should look something like 'http://{host}/tfs/{collection}/{project}/_versionControl'
+---@field version_control_web_url string
+---
+---makes commands synchronous, use this when trying to use things like :TF checkout in macros
+---@field blocking boolean
+---
+---command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
+---@field diff_open_cmd string
+---
+---command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
+---@field workfolds tfvc.workfold[]
+
+---@alias tfvc.versionspec string see :h tfvc-versionspec
+
+---@class tfvc.pending_change
+---@field name string
+---
+---Types of Change. One or more of "Edit, Add, Delete, Encoding" separated by spaces
+---@field Change string
+---
+---full local path, normalized via vim.fs.normalize
+---@field Local string
+---
+---local path relative to cwd, normalized via vim.fs.normalize
+---@field Relative string
+---
+---server path
+---@field item string
+---
+---Type of Item. "File" or "Directory"
+---@field type string
+
+---@class tfvc.workfold
+---@field collection string
+---@field serverPath string
+---@field localPath string
+
+---@class tfvc.file_version
+---
+---the version spec that defines what version of the file this item is
+---@field versionspec tfvc.versionspec
+---
+---associated local version
+---@field local_file string
+---
+---local path to server version
+---@field server_file string
+
+---@class tfvc.server_file : tfvc.file_version
+---@field bufType 'serverFile'
+
+---@class tfvc.local_file
+---@field bufType 'localFile'
+---@field server_path string
+---@field isServerFile? boolean
+---@field versionspec? tfvc.versionspec
+---@field pendingChange? tfvc.pending_change
+---@field file_history? any
+
+---@class tfvc.xmlPendingChange
+---@field chg string Types of Change One or more of "Edit, Add, Delete, Encoding" separated by spaces
+---@field chgEx string
+---@field ct string
+---@field date string
+---@field enc string
+---@field hash string
+---@field item string
+---@field itemid string
+---@field len string
+---@field local string
+---@field pcid string
+---@field psn string
+---@field pso string
+---@field psod string
+---@field type string
+---@field uhash string
+---@field ver string
+
+---@alias tfvc.buf_info tfvc.server_file|tfvc.local_file
+
+---@class tfvc.subcommand
+---@field desc string
+---@field complete nil|boolean|function
+---@field run fun(opts: vim.api.keyset.create_user_command.command_args)
+
+---@class tfvc.tf_cmd_opts
+---
+---should output be printed in messages?
+---@field print_stdout boolean?
+---
+---should command that was ran not be printed?
+---@field suppress_echo boolean?
+---
+---should callback be called despite non-zero exit-code?
+---@field return_stderr_on_failure boolean?
+---
+---can output be cached, and subsequent calls be served by just retrieving the cached data?
+---@field memoize boolean?
+---
+---print full trace 
+---@field debug boolean?

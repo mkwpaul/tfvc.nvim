@@ -1,5 +1,10 @@
-local function __TF(...) return require ('tfvc').cmd_TF(...) end
-local function __TF_complete(...) return require('tfvc').cmd_TF_complete(...) end
+local function __TF(...)
+  return require ('tfvc').cmd_TF(...)
+end
+local function __TF_complete(...)
+  return require('tfvc').cmd_TF_complete(...)
+end
+
 local TF_opts = {
   nargs = '+',
   bang = true,
@@ -39,7 +44,7 @@ if not vim.g.tfvc_disable_default_keymaps then
     { key = '<leader>tc', cmd = '<cmd>TF checkout<CR>',               desc = 'Checkout file for editing', },
     { key = '<leader>tl', cmd = '<cmd>TF diff<CR>',                   desc = 'Compare local file to latest server version', },
     { key = '<leader>tw', cmd = '<cmd>TF openWebHistory<CR>',         desc = 'Open Web History for current File/Directory', },
-    { key = '<leader>ts', cmd = '<cmd>TF status<CR>',                 desc = 'Load Status (Pending Changes) into quickfix list', },
+    { key = '<leader>ts', cmd = '<cmd>TF QFstatus<CR>',               desc = 'Load Status (Pending Changes) into quickfix list', },
     { key = '<leader>tr', cmd = '<cmd>TF rename<CR>',                 desc = 'Renames/Moves file or directory', },
     { key = '<leader>th', cmd = '<cmd>TF history<CR>',                desc = 'Shows history of current file in interactive buffer', },
     { key = '<C-A-j>',    cmd = '<cmd>cnext<CR><cmd>TF diff<CR><CR>', desc = 'Diff next file in quickfix list' },

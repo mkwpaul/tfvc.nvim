@@ -1,4 +1,4 @@
---- implements reading logic and keyhandling for custom tfvc:/// buffers
+--- implements 'rendering' logic and keyhandling for custom tfvc:/// buffers
 local M = {}
 
 function M.set_tfvc_buf_opts(buf, delete)
@@ -19,7 +19,6 @@ end
 vim.api.nvim_create_autocmd('BufEnter', {
   pattern = 'tfvc:///*',
   callback = function (args)
-
     --
     -- unlist buffers to not clutter the buffer list
     --
@@ -66,14 +65,6 @@ function M.history___get_changeset_from_line(buf)
   end
 end
 
---- options for calling tf.exe
----@type tfvc.tf_cmd_opts
-local tf_cmd_opts = {
-  suppress_echo = true,
-  return_stderr_on_failure = true,
-  debug = true,
-}
-
 function M.history_bufreadcmd(args)
   local buf = args.buf
   local bufOpt = { buf = buf }
@@ -109,6 +100,12 @@ function M.history_bufreadcmd(args)
     '# Local-Path: ' .. path,
     "# Help: g?",
     __load_more_prompt
+  }
+
+  ---@type tfvc.tf_cmd_opts
+  local tf_cmd_opts = {
+    suppress_echo = true,
+    return_stderr_on_failure = true,
   }
 
   local function render_page(obj, remove_header)

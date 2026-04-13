@@ -283,6 +283,12 @@ gf    View file version
 
 This plugin currently assumes a case-insensitive file-system.
 
+It currently only supports one workfold per workspace. Multiple mappings
+(and cloaking) aren't considered when mapping server paths to local paths and
+vice versa.
+
+It does support multiple workspaces though.
+
 # Questions & Answers
 
 - `How do I check in changes`?
