@@ -224,6 +224,7 @@ function M.changeset_bufreadcmd(args)
   u.tf_cmd(cmd, tf_cmd_opts, vim.schedule_wrap(function(obj)
 
     -- Replace buffer content with command output
+    vim.api.nvim_set_option_value('modifiable', true, bufOpt)
     vim.api.nvim_set_option_value('filetype', 'tf_changeset', bufOpt)
     vim.api.nvim_set_option_value('ff', 'dos', bufOpt)
 
@@ -302,6 +303,8 @@ function M.files_bufreadcmd(args)
   local fresh = vim.v.cmdbang == 1
   u.tf_get_version_from_versionspec(path, versionspec, fresh, function (file_path)
     vim.api.nvim_buf_call(buf, function()
+
+      vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
       vim.cmd('noautocmd keepalt keepjumps silent read ++edit ' .. vim.fn.fnameescape(file_path))
       vim.api.nvim_buf_set_lines(buf, 0, 1, true, {}); -- replace first line with no lines (i.e. delete first line)
 
