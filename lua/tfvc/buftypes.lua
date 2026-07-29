@@ -86,10 +86,24 @@ function M.history_bufreadcmd(args)
 
   vim.api.nvim_set_option_value('modifiable', true, bufOpt)
   local limit = vars.history_entry_limit
-  local cmd = { 'history',  path, '/recursive', '/noprompt', '/stopafter:'..limit, '/format:brief' }
+  local cmd = { 'history',  path,  '/noprompt', '/stopafter:'..limit, '/format:brief',  }
   local u = require('tfvc.utils')
 
   local fsinfo =  vim.uv.fs_stat(path) or { type = 'unknown' }
+
+  -- The /itemmode flag changes how the TF tool tracks history by considering a files identity rather than its location
+  -- Practically this means that we get to see the history past a rename / move.
+  --
+  -- '/itemmode' and '/recursive' are mutually exclusive however.
+  --
+  -- If /recursive is set, then itemmode gets ignored.
+  -- So we set one or the other
+  if fsinfo.type == 'file' then
+    table.insert(cmd, '/itemmode')
+  else
+    table.insert(cmd, '/recursive')
+  end
+
 
   ---@type string|nil
   local continue_at = nil
