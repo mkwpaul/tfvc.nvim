@@ -1,6 +1,12 @@
 --- implements 'rendering' logic and keyhandling for custom tfvc:/// buffers
 local M = {}
 
+local function mapbuf(buf)
+  return function (modes, lhs, rhs, desc)
+    vim.keymap.set(modes, lhs, rhs, { buf = buf, desc = desc })
+  end
+end
+
 function M.set_tfvc_buf_opts(buf, delete)
   local bufOpt = { buf = buf }
   vim.api.nvim_set_option_value('buftype', 'nofile', bufOpt)
@@ -98,11 +104,11 @@ function M.history_bufreadcmd(args)
   --
   -- If /recursive is set, then itemmode gets ignored.
   -- So we set one or the other
-  if fsinfo.type == 'file' then
-    table.insert(cmd, '/itemmode')
-  else
-    table.insert(cmd, '/recursive')
-  end
+  -- if fsinfo.type == 'file' then
+  --   table.insert(cmd, '/itemmode')
+  -- else
+  -- end
+  table.insert(cmd, '/recursive')
 
 
   ---@type string|nil
@@ -202,20 +208,19 @@ function M.history_bufreadcmd(args)
       end))
     end
 
-    local map = vim.keymap.set
-    local keymapOpt = { buffer = buf }
-    map('n', 'g?', '<cmd>help tfvc-history-buffer-keymaps<CR>' , keymapOpt)
-    map('n', 'gx', open_cs_in_web, keymapOpt)
-    map('n', 'dd', open_cs, keymapOpt)
-    map('n', '<CR>', open_cs, keymapOpt)
-    map('n', '<C-l>', load_more, keymapOpt)
+    local map = mapbuf(buf);
+    map('n', 'g?', '<cmd>map <buffer><CR>', 'Show Help')
+    map('n', 'gx', open_cs_in_web, 'Open changeset in web client')
+    map('n', 'dd', open_cs, 'Open Changeset')
+    map('n', '<CR>', open_cs,' Open Changeset')
+    map('n', '<C-l>', load_more, 'Load More')
 
-    map('n', '<leader>te', '<cmd>e '.. path .. '<CR>', keymapOpt)
+    map('n', '<leader>te', '<cmd>e '.. path .. '<CR>', 'Go to local file')
     if fsinfo.type == 'file' then
-      map('n', 'gf', view_cs_file_version, keymapOpt)
-      map('n', 'dl', compare_with_local, keymapOpt)
-      map('v', 'dd', comp_via_visual, keymapOpt)
-      map('v', '<CR>', comp_via_visual, keymapOpt)
+      map('n', 'gf', view_cs_file_version, 'View Changeset File version')
+      map('n', 'dl', compare_with_local, 'Compare with local')
+      map('v', 'dd', comp_via_visual, 'Compare with local (stard-end based on selection')
+      map('v', '<CR>', comp_via_visual, 'Compare with local (stard-end based on selection')
     end
   end))
 end
@@ -292,14 +297,13 @@ function M.changeset_bufreadcmd(args)
       vim.cmd('e tfvc:///files/C' .. cs .. '/' .. path)
     end)
 
-    ---@type vim.keymap.set.Opts
-    local keymapOpt = { buffer = buf }
-    vim.keymap.set('n', 'g?', '<cmd>help tfvc-changeset-buffer-keymaps<CR>' , keymapOpt)
-    vim.keymap.set('n', 'gf', view_file_version, keymapOpt)
-    vim.keymap.set('n', 'dl', compare_with_local, keymapOpt)
-    vim.keymap.set('n', 'dt', compare_with_latest, keymapOpt)
-    vim.keymap.set('n', 'dd', compare_with_previous, keymapOpt)
-    vim.keymap.set('n', '<CR>', compare_with_previous, keymapOpt)
+    local map = mapbuf(buf)
+    map('n', 'g?', '<cmd>map <buffer><CR>' , 'Show Help')
+    map('n', 'gf', view_file_version, 'Show File under cursor')
+    map('n', 'dl', compare_with_local, 'Compare File under cursor with local version')
+    map('n', 'dt', compare_with_latest, 'Compare File under cursor with latest server version')
+    map('n', 'dd', compare_with_previous, 'Compare File under cursor with previous version')
+    map('n', '<CR>', compare_with_previous, 'Compare File under cursor with previous version')
   end))
 end
 
