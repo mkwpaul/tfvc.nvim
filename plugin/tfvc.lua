@@ -34,6 +34,12 @@ vim.api.nvim_create_autocmd('BufReadCmd', {
   callback = function (args) require('tfvc.buftypes').files_bufreadcmd(args) end
 })
 
+vim.api.nvim_create_autocmd('BufReadCmd', {
+  group = augroup_tfvc,
+  pattern = 'tfvc:///review',
+  callback = function (args) require('tfvc.review').review_bufreadcmd(args) end
+})
+
 -- default_keymaps
 if not vim.g.tfvc_disable_default_keymaps then
   local function toggle_diff() require('tfvc.utils').toggle_diff() end

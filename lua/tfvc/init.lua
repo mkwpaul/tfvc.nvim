@@ -155,6 +155,12 @@ M.commands = {
       ]]
     end
   },
+  review = {
+    desc = 'Interactive review of pending changes (like vim-fugitive :Git)',
+    run = function()
+      vim.cmd('e tfvc:///review')
+    end
+  },
   openWebHistory = {
     desc = 'Open Web History for current File/Directory',
     run = function() require('tfvc.utils').cmd_open_web_history() end,
