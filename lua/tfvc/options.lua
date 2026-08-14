@@ -18,6 +18,7 @@ M.option_definitions = {
   output_encoding = { fallback = 'UTF-8', },
   version_control_web_url = { fallback = nil, type = 'string' },
   workfolds = { fallback = {}, type = 'table' },
+  status_open_cmd = { fallback = 'tabnew' }
 }
 
 --[[

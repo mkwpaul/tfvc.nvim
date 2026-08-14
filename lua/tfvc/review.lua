@@ -23,15 +23,13 @@ end
 --- Renders the review buffer with pending changes
 ---@param buf number
 ---@param pending_changes tfvc.pending_change[]
----@param show_inline_diff boolean
-local function render_review_buffer(buf, pending_changes, show_inline_diff)
+local function render_review_buffer(buf, pending_changes)
   local bufOpt = { buf = buf }
   local u = require('tfvc.utils')
-  local v = require('tfvc.options')
 
   local buffer_content = {
-    '# TFVC Review - Pending Changes',
-    '# Help: g? for keymaps',
+    'TFVC: Status',
+    'Help: g? for keymaps',
     '',
   }
 
@@ -46,6 +44,9 @@ local function render_review_buffer(buf, pending_changes, show_inline_diff)
   -- Create a mapping of line number to full path
   local line_to_path = {}
   local current_line = #buffer_content + 1 -- Start after header
+
+  -- Get expanded diffs from buffer variable (persists across re-renders)
+  local expanded_diffs = vim.b[buf].tfvc_review_expanded_diffs or {}
 
   -- Group by change type
   ---@type table<string, tfvc.pending_change[]>
@@ -74,11 +75,20 @@ local function render_review_buffer(buf, pending_changes, show_inline_diff)
       if cwd and display_path:sub(1, #cwd) == cwd then
         display_path = display_path:sub(#cwd + 2) -- +2 to skip the path separator
       end
-      buffer_content[#buffer_content+1] = '  ' .. icon .. ' ' .. display_path
+      buffer_content[#buffer_content+1] = icon .. ' ' .. display_path
 
       -- Store the mapping of line number to full path
       line_to_path[current_line] = full_path
       current_line = current_line + 1
+
+      -- If this file's diff is expanded, insert it here
+      if expanded_diffs[full_path] then
+        local diff_lines = expanded_diffs[full_path]
+        for _, line in ipairs(diff_lines) do
+          buffer_content[#buffer_content+1] = line
+          current_line = current_line + 1
+        end
+      end
     end
     buffer_content[#buffer_content+1] = ''
     current_line = current_line + 1
@@ -87,71 +97,67 @@ local function render_review_buffer(buf, pending_changes, show_inline_diff)
   -- Store the mapping in buffer variable
   vim.b[buf].tfvc_review_line_to_path = line_to_path
 
-  -- Add inline diff if requested
-  if show_inline_diff then
-    buffer_content[#buffer_content+1] = '---'
-    buffer_content[#buffer_content+1] = '# Inline Diff'
-    buffer_content[#buffer_content+1] = ''
-
-    -- Get unified diff
-    local diff_cmd = {
-      'diff',
-      vim.uv.cwd() or '.',
-      '/Format:Unified',
-      '/recursive',
-      '/ignorecase',
-      '/ignorespace',
-      '/noprompt'
-    }
-
-    u.tf_cmd(diff_cmd, { suppress_echo = true }, vim.schedule_wrap(function(obj)
-      if obj.code == 0 and obj.stdout and #obj.stdout > 0 then
-        local diff_lines = vim.split(obj.stdout, '\r\n')
-        vim.api.nvim_set_option_value('modifiable', true, bufOpt)
-        vim.list_extend(buffer_content, diff_lines)
-        vim.api.nvim_buf_set_lines(buf, 0, -1, false, buffer_content)
-        set_review_buf_opts(buf)
-
-        -- Position cursor at first file entry
-        vim.api.nvim_buf_call(buf, function()
-          vim.cmd('normal! gg')
-          vim.fn.search('^  ')
-        end)
-      end
-    end))
-  end
-
   vim.api.nvim_set_option_value('modifiable', true, bufOpt)
   vim.api.nvim_buf_set_lines(buf, 0, -1, false, buffer_content)
   set_review_buf_opts(buf)
 
-  if not show_inline_diff then
-    -- Position cursor at first file entry
-    vim.api.nvim_buf_call(buf, function()
-      vim.cmd('normal! gg')
-      vim.fn.search('^  ')
-    end)
-  end
 end
 
 --- Gets the file path from the current line
 ---@param buf number
 ---@return string|nil path The file path or nil if not on a file line
 local function get_file_from_line(buf)
-  -- Get the line-to-path mapping from buffer variable
   local line_to_path = vim.b[buf].tfvc_review_line_to_path
   if not line_to_path then
     return nil
   end
 
+  local line_num = vim.api.nvim_win_get_cursor(0)[1] -- Get current line number (1-indexed)
+  local path = line_to_path[line_num] -- Look up the path for this line
+  if path then
+    return vim.fs.normalize(path)
+  end
+  return nil
+end
+
+--- Gets the file path by searching backwards for the nearest file entry line
+---@param buf number
+---@return string|nil path The file path or nil if not found
+local function get_file_from_line_or_above(buf)
+  -- Get the line-to-path mapping from buffer variable
+  local line_to_path = vim.b[buf].tfvc_review_line_to_path
+  assert(not vim.isnil(line_to_path), 'tfvc_review_line_to_path must be set')
+
   -- Get current line number (1-indexed)
   local line_num = vim.api.nvim_win_get_cursor(0)[1]
 
-  -- Look up the path for this line
-  local path = line_to_path[line_num]
+  -- Search backwards from current line to find a file entry
+  for i = line_num, 1, -1 do
+    local path = line_to_path[i]
+    if not vim.isnil(path) then
+      return vim.fs.normalize(path)
+    end
+  end
 
-  if path then
-    return vim.fs.normalize(path)
+  return nil
+end
+
+--- Finds the line number for a given file path
+---@param buf number
+---@param target_path string
+---@return number|nil line_num The line number (1-indexed) or nil if not found
+local function find_line_for_path(buf, target_path)
+  local line_to_path = vim.b[buf].tfvc_review_line_to_path
+  if not line_to_path then
+    return nil
+  end
+
+  local normalized_target = vim.fs.normalize(target_path)
+
+  for line_num, path in pairs(line_to_path) do
+    if not vim.isnil(path) and vim.fs.normalize(path) == normalized_target then
+      return line_num
+    end
   end
 
   return nil
@@ -164,43 +170,120 @@ local function setup_keymaps(buf, pending_changes)
   local map = mapbuf(buf)
   local u = require('tfvc.utils')
 
-  -- Help
-  map('n', 'g?', function()
-    local help = {
-      'TFVC Review Keymaps:',
-      '',
-      '  g?        - Show this help',
-      '  q         - Close review buffer',
-      '  r         - Refresh pending changes',
-      '  i         - Toggle inline diff view',
-      '',
-      '  <CR>      - Open diff split for file under cursor',
-      '  d         - Open diff split for file under cursor',
-      '  gf        - Open local file under cursor',
-      '  -         - Stage/unstage file (checkout for edit if needed)',
-      '  u         - Undo checkout of file under cursor',
-      '',
-      '  cc        - Checkin pending changes',
-      '',
-    }
-    vim.notify(table.concat(help, '\n'), vim.log.levels.INFO)
-  end, 'Show Help')
+  local function show_inline_diff(path, expanded_diffs)
 
-  -- Close buffer
-  map('n', 'q', '<cmd>close<CR>', 'Close review buffer')
+    local diff_cmd = { 'diff', path, '/Format:Unified', '/noprompt' }
 
-  -- Refresh
-  map('n', 'r', function()
-    vim.cmd('e!')
-  end, 'Refresh pending changes')
+    u.tf_cmd(diff_cmd, { suppress_echo = true }, vim.schedule_wrap(function(obj)
+      if obj.code == 0 and obj.stdout and #obj.stdout > 0 then
+        local diff_lines = vim.split(obj.stdout, '\r\n')
 
-  -- Toggle inline diff
-  map('n', 'i', function()
-    local show_inline = not vim.b[buf].show_inline_diff
-    vim.b[buf].show_inline_diff = show_inline
-    render_review_buffer(buf, pending_changes, show_inline)
-    setup_keymaps(buf, pending_changes) -- Re-setup keymaps after re-render
-  end, 'Toggle inline diff')
+        -- Filter out redundant header lines
+        local filtered_lines = {}
+        for _, line in ipairs(diff_lines) do
+
+          -- Skip the "edit:", "File:", and first "===" separator lines
+          if not (line:match('^edit:') or
+                  line:match('^File:') or
+                  line:match('^--- Server:') or
+                  line:match('^+++ Local:') or
+                  (line:match('^=+$') --[[and #filtered_lines == 0]])
+                    ) then
+            table.insert(filtered_lines, line)
+          end
+        end
+
+        -- Remove empty last line if present
+        if filtered_lines[#filtered_lines] == '' then
+          table.remove(filtered_lines, #filtered_lines)
+        end
+
+        expanded_diffs[path] = filtered_lines
+        vim.b[buf].tfvc_review_expanded_diffs = expanded_diffs
+        render_review_buffer(buf, pending_changes)
+        setup_keymaps(buf, pending_changes)
+      else
+        vim.notify('No diff available for this file', vim.log.levels.INFO)
+      end
+    end))
+  end
+
+  map('n', 'g?', '<cmd>map <buffer><CR>',  'Show Keymaps')
+  map('n', 'r', 'e!', 'Refresh pending changes')
+
+  -- Expand inline diff for file under cursor
+  map('n', '>', function()
+    local path = get_file_from_line(buf)
+    if not path then
+      vim.notify('No file under cursor', vim.log.levels.WARN)
+      return
+    end
+
+    local expanded_diffs = vim.b[buf].tfvc_review_expanded_diffs or {}
+    if expanded_diffs[path] then
+      vim.notify('Diff already expanded', vim.log.levels.INFO)
+      return
+    end
+    show_inline_diff(path, expanded_diffs)
+  end, 'Expand inline diff for file')
+
+  -- Collapse inline diff - works on file line or inside expanded diff
+  map('n', '<', function()
+    -- Try to find file from current line or search upwards
+    local path = get_file_from_line_or_above(buf)
+    if not path then
+      vim.notify('No file found', vim.log.levels.WARN)
+      return
+    end
+
+    -- Get or initialize expanded diffs table
+    local expanded_diffs = vim.b[buf].tfvc_review_expanded_diffs or {}
+    if not expanded_diffs[path] then
+      vim.notify('Diff not expanded', vim.log.levels.INFO)
+      return
+    end
+
+    -- Collapse - remove the diff
+    expanded_diffs[path] = nil
+    vim.b[buf].tfvc_review_expanded_diffs = expanded_diffs
+    render_review_buffer(buf, pending_changes)
+    setup_keymaps(buf, pending_changes)
+
+    -- Move cursor to the file entry line
+    local file_line = find_line_for_path(buf, path)
+    if file_line then
+      vim.api.nvim_win_set_cursor(0, {file_line, 0})
+    end
+  end, 'Collapse inline diff for file')
+
+  -- Toggle inline diff for file under cursor
+  map('n', '=', function()
+    local path = get_file_from_line(buf)
+    if not path then
+      vim.notify('No file under cursor', vim.log.levels.WARN)
+      return
+    end
+
+    -- Get or initialize expanded diffs table
+    local expanded_diffs = vim.b[buf].tfvc_review_expanded_diffs or {}
+
+    -- Toggle: if already expanded, collapse it; otherwise expand it
+    if expanded_diffs[path] then
+      -- Collapse - remove the diff
+      expanded_diffs[path] = nil
+      vim.b[buf].tfvc_review_expanded_diffs = expanded_diffs
+      render_review_buffer(buf, pending_changes)
+      setup_keymaps(buf, pending_changes)
+
+      -- Move cursor to the file entry line
+      local file_line = find_line_for_path(buf, path)
+      if file_line then
+        vim.api.nvim_win_set_cursor(0, {file_line, 0})
+      end
+    else
+      show_inline_diff(path, expanded_diffs)
+    end
+  end, 'Toggle inline diff for file')
 
   -- Open diff split (compare server version with local)
   local function open_diff()
@@ -228,31 +311,17 @@ local function setup_keymaps(buf, pending_changes)
     vim.cmd('e ' .. vim.fn.fnameescape(path))
   end, 'Open local file')
 
-  -- Checkout for edit (stage)
-  map('n', '-', function()
-    local path = get_file_from_line(buf)
-    if not path then
-      vim.notify('No file under cursor', vim.log.levels.WARN)
-      return
-    end
-    local cmd = { 'checkout', path }
-    u.tf_cmd(cmd, { print_stdout = true }, function(obj)
-      if obj.code == 0 then
-        vim.schedule(function()
-          vim.cmd('e!') -- Refresh
-        end)
-      end
-    end)
-  end, 'Checkout file for edit')
 
-  map('n', '?', function()
-    local path = get_file_from_line(buf)
-    if not path then
-      vim.notify('No file under cursor', vim.log.levels.WARN)
-    else
-      vim.notify(path, vim.log.levels.INFO)
-    end
-  end, '')
+  if DEBUG then
+    map('n', '?', function()
+      local path = get_file_from_line_or_above(buf)
+      if not path then
+        vim.notify('No file under cursor', vim.log.levels.WARN)
+      else
+        vim.notify(vim.inspect(path), vim.log.levels.INFO)
+      end
+    end, '')
+  end
 
   -- Undo checkout
   map('n', 'u', function()
@@ -311,12 +380,6 @@ function M.review_bufreadcmd(args)
   local buf = args.buf
   local u = require('tfvc.utils')
 
-  -- Initialize buffer state
-  if vim.b[buf].show_inline_diff == nil then
-    vim.b[buf].show_inline_diff = false
-  end
-  local show_inline_diff = vim.b[buf].show_inline_diff
-
   -- Get pending changes
   local fresh = true
   u.do_with_pending_changes(fresh, vim.schedule_wrap(function(pending_changes)
@@ -336,11 +399,14 @@ function M.review_bufreadcmd(args)
       end
     end
 
-    -- Render the buffer
-    render_review_buffer(buf, pending_changes, show_inline_diff)
-
-    -- Setup keymaps
+    render_review_buffer(buf, pending_changes)
     setup_keymaps(buf, pending_changes)
+
+    -- Position cursor at first file entry
+    vim.api.nvim_buf_call(buf, function()
+      vim.cmd('normal! gg')
+      vim.fn.search('^[^ #]') -- Find first line that doesn't start with space or #
+    end)
   end))
 end
 

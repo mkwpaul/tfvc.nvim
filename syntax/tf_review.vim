@@ -12,10 +12,12 @@ syn keyword Conditional merge branch
 syn keyword Identifier rename encoding lock
 
 " File entries - highlight the leading icon/marker
-syn match Special "^  [^ ]\+ "
+syn match Special "^[^ #-][^ ]*"
 
 " Diff sections
 syn match Delimiter "^---$"
 
 " Include diff syntax for inline diff sections
 runtime! syntax/diff.vim
+
+ syn match @keyword "^\w*:"
