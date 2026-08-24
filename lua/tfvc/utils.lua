@@ -334,14 +334,26 @@ end
 ---@return tfvc.workfold
 function M.get_active_workfold()
   local options = require 'tfvc.options'
+
   local function try_get_from_cwd()
     local cwd = assert(vim.uv.cwd())
-    cwd = vim.fs.normalize(cwd):lower()
+    cwd = vim.fs.normalize(cwd):lower() .. '/'
+
     local function find_wf(workfold)
       local localPath = vim.fs.normalize(workfold.localPath)
-      localPath = localPath:lower()
+      localPath = localPath:lower() .. '/'
+
+      -- appending a '/' is important to prevent the following:
+
+      -- if my cwd is "D:/dev2/....../"
+      -- and my workfolds are { "D:/dev", "D:/dev2" }
+      --
+      -- then it erroneously matches the first one,
+      -- because the cwd (D:/dev2/..." starts with "D:/dev"
+      --
       return cwd:find(localPath, 0, true) ==1
     end
+
     return
       vim.iter(options.workfolds):find(find_wf) or
       vim.iter(M.workfolds):find(find_wf)
