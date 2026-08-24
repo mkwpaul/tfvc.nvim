@@ -6,7 +6,7 @@ local function __TF_complete(...)
 end
 
 local TF_opts = {
-  nargs = '+',
+  nargs = '*',
   bang = true,
   range = true,
   desc = 'Interacts with TF Version Control',
@@ -32,6 +32,12 @@ vim.api.nvim_create_autocmd('BufReadCmd', {
   group = augroup_tfvc,
   pattern = 'tfvc:///files/*',
   callback = function (args) require('tfvc.buftypes').files_bufreadcmd(args) end
+})
+
+vim.api.nvim_create_autocmd('BufReadCmd', {
+  group = augroup_tfvc,
+  pattern = 'tfvc:///status',
+  callback = function (args) require('tfvc.review').review_bufreadcmd(args) end
 })
 
 -- default_keymaps

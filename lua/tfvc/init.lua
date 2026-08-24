@@ -130,7 +130,14 @@ M.commands = {
     end
   },
   status = {
-    desc = 'Show local changes (within cd) in interactive buffer',
+    desc = 'Interactive review of pending changes',
+    run = function()
+      local o = require('tfvc.options')
+      vim.cmd(o.status_open_cmd .. ' tfvc:///status')
+    end
+  },
+  status_2 = {
+    desc = 'Older simpler implementation of status command',
     run = function()
       -- currently too lazy to do this in lua,
       -- for once, vimscript seems much more practical for this kind of job
@@ -248,62 +255,6 @@ if inline_diff then
   }
 end
 
-local function path_complete(start)
-  if start == '' or start == '.' then
-    start = './'
-  end
-
-  -- remove escaping any potentially escaped spaces
-  -- that we escaped during an earlier path_complete
-  -- we won't find any entries with vim.fs.dir with the escaped spaces
-  start = start:gsub([[\ ]], ' ')
-
-  --tfvc_comp.start = start
-  local paren = start
-  local filter, iter = nil, nil
-  if start:sub(#start) == '/' then
-    iter = vim.fs.dir(start)
-  else
-    paren = vim.fs.dirname(start) .. '/'
-    filter = start:gsub(paren, '')
-    iter = vim.fs.dir(paren)
-  end
-
-  -- append '/' for directories
-  local entries = vim.iter(iter):map(function (current, type)
-    if type == 'directory' then
-      return paren .. current .. '/'
-    else
-       return paren .. current
-    end
-  end)
-
-  -- if we have a partial path, filter entires that don't start with the typed beginning
-  if filter then
-    local prefix = string.lower(paren .. filter)
-    entries = entries:filter(function(path, _)
-      return string.lower(path):find(prefix, 1, true) ~= nil
-    end)
-  end
-
-  -- escape spaces for the command syntax
-  entries = entries
-    :map(function(path)
-      local subbed, _ = path:gsub(' ', [[\ ]])
-      return subbed
-    end):totable()
-
-  -- sort so directories are listed first, and then files
-  table.sort(entries, function(a, b)
-    local a_dir = a:sub(#a) == '/'
-    local b_dir = b:sub(#b) == '/'
-    if a_dir and not b_dir then return true end
-    if b_dir and not a_dir then return false end
-    return a > b
-  end)
-  return entries
-end
-
 local cmd_name = 'TF'
 function M.cmd_TF_complete(arg_lead, cmdline, cursor_pos)
 
@@ -313,7 +264,7 @@ function M.cmd_TF_complete(arg_lead, cmdline, cursor_pos)
   if subcmd and subcmd_arg_lead and M.commands[subcmd] then
     local subcomplete = M.commands[subcmd].complete
     if subcomplete == true then
-      return path_complete(subcmd_arg_lead)
+      return vim.fn.getcompletion(subcmd_arg_lead, 'file')
     end
     if type(subcomplete) == 'function' then
       return subcomplete(subcmd_arg_lead, arg_lead, cmdline, cursor_pos)
@@ -331,7 +282,10 @@ end
 function M.cmd_TF(opts)
   local tfvc = require 'tfvc'
   local fargs = opts.fargs
-  local cmd = fargs[1]
+  local cmd = 'status'
+  if #fargs > 0 then
+    cmd = fargs[1]
+  end
   local args = #fargs > 1 and vim.list_slice(fargs, 2, #fargs) or {}
 
   local subcommand = tfvc.commands[cmd]

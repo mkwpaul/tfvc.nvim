@@ -28,6 +28,8 @@ error('Cannot require a meta file')
 ---command to use when navigating to tfvc:/// paths via commands, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
 ---@field history_open_cmd string
 ---
+---@field status_open_cmd string
+---
 ---if specified, use iconv to convert output from tf.exe from the specified encoding to utf-8, value is passed as-is to iconv, so it should be an encoding
 ---@field output_encoding string
 ---

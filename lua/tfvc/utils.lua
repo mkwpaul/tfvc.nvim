@@ -547,9 +547,14 @@ local function iter_xml(node, changes)
   if node.tag == 'PendingChange' then
     ---@type tfvc.xmlPendingChange
     local props = node.attrs
+
+    local l = vim.fs.normalize(props["local"]);
+
+    ---@type tfvc.pending_change
     local pendingChange = {
       Change = props.chg or '',
-      Local = vim.fs.normalize(props["local"]),
+      Local = l,
+      Relative = vim.fs.relpath('.', l, {}) or l,
       item = props.item,
       type = props["type"],
       name = vim.fs.basename(props["local"])
