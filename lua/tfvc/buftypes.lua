@@ -278,6 +278,8 @@ function M.changeset_bufreadcmd(args)
         end
       end
     end
+
+    local ns = vim.api.nvim_create_namespace('tfvc')
     local compare_with_previous = with_path_do(function(path)
       u.diff_files(
         'tfvc:///files/C' .. tonumber(cs) - 1 .. '/' .. path,
@@ -297,8 +299,69 @@ function M.changeset_bufreadcmd(args)
       vim.cmd('e tfvc:///files/C' .. cs .. '/' .. path)
     end)
 
+    local inline_diff = with_path_do(function(path)
+      local inline_cmd = {
+        'diff', '/version:C' .. tonumber(cs) - 1 .. '~' .. cs, path, '/format:Unified'
+      }
+      u.tf_cmd(inline_cmd, { print_stdout = false, memoize = true },
+      vim.schedule_wrap(function (obj)
+
+        local diff_lines = vim.split(obj.stdout or obj.stderr, '\r\n')
+        diff_lines = vim.iter(diff_lines):filter(function (line)
+          return not (line:match('^edit:') or
+          line:match('^File:') or
+          line:match('^%-%-%-') or
+          line:match('^%+%+%+') or
+          (line:match('^=+$') )
+        )end):totable()
+
+        if #diff_lines > 0 then
+          vim.api.nvim_set_option_value('modifiable', true, bufOpt)
+          local cursor = vim.api.nvim_win_get_cursor(0)
+          vim.api.nvim_put(diff_lines, 'l', true, false)
+          vim.api.nvim_buf_set_extmark(buf, ns, cursor[1] - 1, 0, { end_line = cursor[1] + #diff_lines, })
+          vim.api.nvim_win_set_cursor(0, cursor)
+          vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+        end
+      end))
+
+    end)
+
+    local function del_inline_diff()
+      local cursor = vim.api.nvim_win_get_cursor(0)
+      local cu_row = cursor[1] - 1
+      local cu_col = cursor[2]
+
+      local marks = vim.api.nvim_buf_get_extmarks(0, ns, 0, -1, { details = true })
+      for _, mark in ipairs(marks) do
+        local id = mark[1]
+        local start_row = mark[2]
+        local start_col = mark[3]
+        local details = assert(mark[4])
+
+        local end_row = details.end_row
+        local end_col = details.end_col
+
+        -- Check if the cursor is inside this specific block's boundaries
+        local after_start = (cu_row > start_row) or (cu_row == start_row and cu_col >= start_col)
+        local before_end = (cu_row < end_row) or (cu_row == end_row and cu_col <= end_col)
+
+        if after_start and before_end then
+          -- + 1 because the line of the changed file is part of the extmark region too,
+          -- we don't want to delete that line
+          vim.api.nvim_set_option_value('modifiable', true, bufOpt)
+          vim.api.nvim_buf_set_text(0, start_row + 1, 0, end_row, end_col, {})
+          vim.api.nvim_buf_del_extmark(0, ns, id)
+          vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+          return true
+        end
+      end
+    end
+
     local map = mapbuf(buf)
     map('n', 'g?', '<cmd>map <buffer><CR>' , 'Show Help')
+    map('n', '>', inline_diff, 'Show inline diff')
+    map('n', '<', del_inline_diff, 'Hide inline diff')
     map('n', 'gf', view_file_version, 'Show File under cursor')
     map('n', 'dl', compare_with_local, 'Compare File under cursor with local version')
     map('n', 'dt', compare_with_latest, 'Compare File under cursor with latest server version')

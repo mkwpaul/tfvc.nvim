@@ -619,6 +619,20 @@ function M.change_type_to_icons(change)
   return table.concat(result, ' ')
 end
 
+function M.change_type_to_abbr(change)
+  local words = vim.split(change or '', ' ', { plain = true, trimempty = true })
+  local result = {}
+  -- TODO: check if icons are availible / check an option
+  for _, value in pairs(words) do
+    if value == 'Add' then table.insert(result, 'A') end
+    if value == 'Edit' then table.insert(result, 'E') end
+    if value == 'Delete' then table.insert(result, 'D') end
+    if value == 'Encoding' then table.insert(result, 'C') end
+    if value == 'Rollback' then table.insert(result, 'R') end
+  end
+  return table.concat(result, ' ')
+end
+
 ---@param pending_changes tfvc.pending_change[] 
 ---@param in_cwd boolean 
 function M.load_pending_changes_into_qf(pending_changes, in_cwd)

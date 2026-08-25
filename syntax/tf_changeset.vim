@@ -10,3 +10,6 @@ syn keyword @diff.plus add
 syn keyword @diff.minus delete
 syn keyword Conditional merge branch
 syn keyword Identifier rename encoding
+
+" Include diff syntax for inline diff sections
+runtime! syntax/diff.vim
