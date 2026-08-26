@@ -1,6 +1,8 @@
 ---@module 'tfvc.types'
 local M = {}
 
+M.ns = vim.api.nvim_create_namespace('tfvc')
+
 ---@type tfvc.file_version[]
 M.file_versions = {}
 ---@type table<tfvc.pending_change>
@@ -215,12 +217,82 @@ function M.url_encode(url)
   return url
 end
 
+function M.invalidate_latest()
+  local cache_root = vim.fn.stdpath('cache')
+  local dir_files = vim.fs.joinpath(cache_root, 'tfvc', 'server_files', 'T*')
+
+  local files = vim.fn.glob(dir_files, true, true)
+  for _, file in ipairs(files) do
+    os.remove(file)
+  end
+
+  for key, value in pairs(M.file_versions) do
+    if value.versionspec == 'T' then
+      M.file_versions[key] = nil
+    end
+  end
+end
+
+TF = M
+-- alternate co-routine-sync
+function M.get_file_diff_co(path, v_l, v_r)
+  local force_fresh = false
+  local cache_path_l = M.tf_get_version_from_versionspec_co(path, v_l, force_fresh)
+  local cache_path_r = M.tf_get_version_from_versionspec_co(path, v_r, force_fresh)
+  local extra_args = diff_args or { '-u', '-w' }
+  local args = { 'diff', unpack(extra_args), cache_path_l, cache_path_r };
+  local res = M.system_co(args)
+  return res
+end
+
+function M.system_co(cmd)
+  local co = assert(coroutine.running())
+  vim.system(cmd, function (obj)
+    coroutine.resume(co, obj)
+  end)
+  return coroutine.yield()
+end
+
+function M.tf_get_version_from_versionspec_co(path, versionspec, force_fresh)
+  local co = assert(coroutine.running())
+  -- necessary because tf_get_version_from_versionspec
+  -- might run synchrounously 
+  --
+  -- in that case if we passed the result to coroutine.resume
+  -- then it would just get swallowed, because the coroutine wasn't yielded yet.
+  --
+  -- not necessary for system_co because vim.system never runs sync
+  local called_sync = true
+  local result = nil
+
+  M.tf_get_version_from_versionspec(path, versionspec, force_fresh, function (obj)
+    if called_sync then
+      result = obj
+      return
+    else
+      coroutine.resume(co, obj)
+    end
+  end)
+
+  if result ~= nil then
+    return result
+  end
+
+  called_sync = false
+  return coroutine.yield()
+end
+
+local printed_warning = false
+
 ---@param path string tfvc server path
 ---@param versionspec tfvc.versionspec
 function M.get_file_cache_path(path, versionspec)
-  if versionspec == 'T' then
-    return nil
+
+  if versionspec == 'T' and not printed_warning then
+    printed_warning = true
+    vim.notify('Reading "latest" file from cache. Might not be up to date', vim.log.levels.WARN)
   end
+
   if path:sub(1,1) ~= '$' then
     path = M.local_path_to_server_path(path)
   end
@@ -242,6 +314,13 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
 
   local cache = M.file_versions
 
+  if (versionspec == 'L') then
+    --local l = (path, true)
+    callback(path)
+    return
+  end
+
+
   if not force_fresh then
     for _, value in pairs(cache) do
       if (value.versionspec == versionspec and path == value.local_file) then
@@ -253,7 +332,7 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
 
   local temp = M.get_file_cache_path(path, versionspec)
   if temp and vim.uv.fs_stat(temp) then
-    vim.print('got file from cache. avoided fetch from server')
+    --vim.print('got file from cache. avoided fetch from server')
     callback(temp)
     return
   end
@@ -605,6 +684,12 @@ function M.do_with_pending_changes(force_fresh, callback)
   end
 end
 
+function M.get_pending_changes_co(force_fresh)
+  return coroutine.yield(function (resume)
+    M.do_with_pending_changes(force_fresh, resume)
+  end)
+end
+
 function M.change_type_to_icons(change)
   local words = vim.split(change or '', ' ', { plain = true, trimempty = true })
   local result = {}
@@ -651,6 +736,99 @@ function M.load_pending_changes_into_qf(pending_changes, in_cwd)
 
   vim.fn.setqflist(qf_entries)
   vim.cmd.copen()
+end
+
+M.inline_diff = { }
+
+function M.get_mark_under_cursor()
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local cu_row = cursor[1] - 1
+  local cu_col = cursor[2]
+
+  local marks = vim.api.nvim_buf_get_extmarks(0, M.ns, 0, -1, { details = true })
+  for _, mark in ipairs(marks) do
+    local start_row = mark[2]
+    local start_col = mark[3]
+    local details = assert(mark[4])
+    local end_row = details.end_row
+    local end_col = details.end_col
+
+    local after_start = (cu_row > start_row) or (cu_row == start_row and cu_col >= start_col)
+    local before_end = (cu_row < end_row) or (cu_row == end_row and cu_col <= end_col)
+
+    if after_start and before_end then
+      return mark
+    end
+  end
+end
+
+function M.inline_diff.del(buf, mark)
+  local bufOpt = { buf = buf }
+  local mark = mark or M.get_mark_under_cursor()
+  if mark then
+    local id = mark[1]
+    local start_row = mark[2]
+    local details = assert(mark[4])
+    local end_row = details.end_row
+    local end_col = details.end_col
+    -- + 1 because the line of the changed file is part of the extmark region too,
+    -- we don't want to delete that line
+    vim.api.nvim_set_option_value('modifiable', true, bufOpt)
+    vim.api.nvim_buf_set_text(0, start_row + 1, 0, end_row + 1, end_col, {})
+    vim.api.nvim_buf_del_extmark(0, M.ns, id)
+    vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+    vim.api.nvim_win_set_cursor(0, {start_row + 1, 0})
+    return true
+  end
+end
+
+-- TODO:
+-- this currently only works with the cursor *at* the line where we want to insert text
+-- some work has been done to make it cursor-position independent.
+-- but we still currently vim.api.nvim_put which makes us cursor-dependend
+-- us trying to set cursor position here also complicates things
+function M.inline_diff.insert(text, buf, row)
+
+  text = string.gsub(text, '\r\n', '\n')
+  local diff_lines = vim.split(text, '\n')
+
+  local bufOpt = { buf = buf }
+  diff_lines = vim.iter(diff_lines)
+  :filter(function (line)
+    return not (line:match('^edit:') or
+    line:match('^File:') or
+    line:match('^%-%-%-') or
+    line:match('^%+%+%+') or
+    (line:match('^=+$') )
+  )end)
+  :totable()
+
+  if diff_lines[#diff_lines] == '' then
+    diff_lines[#diff_lines] = nil
+  end
+
+  if #diff_lines == 0 then
+    diff_lines = { '# No Changes' }
+  end
+
+  local hl_group = nil
+  if #diff_lines > 0 then
+    vim.schedule(function ()
+
+      local c = vim.api.nvim_win_get_cursor(0)
+      vim.api.nvim_set_option_value('modifiable', true, bufOpt)
+      local cursor = { row }
+      local end_line = cursor[1] - 1 + #diff_lines
+
+      vim.api.nvim_put(diff_lines, 'l', true, false)
+      ---@type vim.api.keyset.set_extmark
+      local ext_opts = { end_line = end_line, hl_group = hl_group }
+
+      vim.api.nvim_buf_set_extmark(buf, M.ns, cursor[1] - 1, 0, ext_opts)
+      vim.api.nvim_win_set_cursor(0, c)
+      vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+    end)
+  end
 end
 
 return M
