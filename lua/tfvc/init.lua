@@ -237,7 +237,21 @@ M.commands = {
       local path = get_path_from_cmd_args(args, 'history', true)
       vim.cmd(v.history_open_cmd .. ' tfvc:///history/'.. path)
     end
-  }
+  },
+  changeset = {
+    desc = 'Shows Changeset details',
+    complete = false,
+    run = function (args)
+      local v = require('tfvc.options')
+      local cs = nil
+      if #args.fargs > 0 then
+        cs = args.fargs[1]
+      else
+        error('must specify Changeset ID')
+      end
+      vim.cmd(v.status_open_cmd .. ' tfvc:///changeset/'.. cs)
+    end
+  },
 }
 
 local _, inline_diff = pcall(require, 'inline_diff')
