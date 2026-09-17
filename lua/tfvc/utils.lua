@@ -740,8 +740,8 @@ end
 
 M.inline_diff = { }
 
-function M.get_mark_under_cursor()
-  local cursor = vim.api.nvim_win_get_cursor(0)
+function M.get_mark_under_cursor(cursor)
+  local cursor = cursor or vim.api.nvim_win_get_cursor(0)
   local cu_row = cursor[1] - 1
   local cu_col = cursor[2]
 
@@ -762,9 +762,9 @@ function M.get_mark_under_cursor()
   end
 end
 
-function M.inline_diff.del(buf, mark)
+function M.inline_diff.del(buf, mark, cursor)
   local bufOpt = { buf = buf }
-  local mark = mark or M.get_mark_under_cursor()
+  local mark = mark or M.get_mark_under_cursor(cursor)
   if mark then
     local id = mark[1]
     local start_row = mark[2]
@@ -777,16 +777,10 @@ function M.inline_diff.del(buf, mark)
     vim.api.nvim_buf_set_text(0, start_row + 1, 0, end_row + 1, end_col, {})
     vim.api.nvim_buf_del_extmark(0, M.ns, id)
     vim.api.nvim_set_option_value('modifiable', false, bufOpt)
-    vim.api.nvim_win_set_cursor(0, {start_row + 1, 0})
-    return true
+    return mark
   end
 end
 
--- TODO:
--- this currently only works with the cursor *at* the line where we want to insert text
--- some work has been done to make it cursor-position independent.
--- but we still currently vim.api.nvim_put which makes us cursor-dependend
--- us trying to set cursor position here also complicates things
 function M.inline_diff.insert(text, buf, row)
 
   text = string.gsub(text, '\r\n', '\n')
@@ -811,24 +805,19 @@ function M.inline_diff.insert(text, buf, row)
     diff_lines = { '# No Changes' }
   end
 
-  local hl_group = nil
-  if #diff_lines > 0 then
-    vim.schedule(function ()
+  vim.schedule(function ()
+    vim.api.nvim_set_option_value('modifiable', true, bufOpt)
+    local cursor = { row }
+    local end_line = cursor[1] - 1 + #diff_lines
 
-      local c = vim.api.nvim_win_get_cursor(0)
-      vim.api.nvim_set_option_value('modifiable', true, bufOpt)
-      local cursor = { row }
-      local end_line = cursor[1] - 1 + #diff_lines
+    vim.api.nvim_buf_set_lines(buf, row, row, true, diff_lines)
 
-      vim.api.nvim_put(diff_lines, 'l', true, false)
-      ---@type vim.api.keyset.set_extmark
-      local ext_opts = { end_line = end_line, hl_group = hl_group }
+    ---@type vim.api.keyset.set_extmark
+    local ext_opts = { end_line = end_line }
+    vim.api.nvim_buf_set_extmark(buf, M.ns, cursor[1] - 1, 0, ext_opts)
+    vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+  end)
 
-      vim.api.nvim_buf_set_extmark(buf, M.ns, cursor[1] - 1, 0, ext_opts)
-      vim.api.nvim_win_set_cursor(0, c)
-      vim.api.nvim_set_option_value('modifiable', false, bufOpt)
-    end)
-  end
 end
 
 return M

@@ -303,15 +303,15 @@ function M.changeset_bufreadcmd(args)
       if mark then
         return
       end
-      local inline_cmd = {
-        'diff', '/version:C' .. tonumber(cs) - 1 .. '~' .. cs, path, '/format:Unified'
-      }
 
-    local row = vim.api.nvim_win_get_cursor(0)[1]
-      u.tf_cmd(inline_cmd, { print_stdout = false, memoize = true },
-      function (obj)
-        u.inline_diff.insert(obj.stdout or obj.stderr, buf, row)
-      end)
+      local l = 'C' .. tonumber(cs) - 1
+      local r = 'C' .. cs
+      local row = vim.api.nvim_win_get_cursor(0)[1]
+      coroutine.wrap(function()
+        local diff = u.get_file_diff_co(path, l, r)
+        u.inline_diff.insert(diff.stdout or diff.stderr, buf, row)
+      end)()
+
     end)
 
     local map = mapbuf(buf)

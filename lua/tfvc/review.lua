@@ -111,15 +111,20 @@ local function setup_keymaps(buf)
   end
 
   local function del_inline_diff()
-    return u.inline_diff.del(buf)
+    local cur = vim.api.nvim_win_get_cursor(0)
+    local mark = u.inline_diff.del(buf, nil, cur)
+    if mark then
+      vim.api.nvim_win_set_cursor(0, {mark[2] + 1, cur[2]})
+    end
+    return mark
   end
 
   map('n', 'g?', '<cmd>map <buffer><CR>',  'Show Keymaps')
   map('n', '>', function() show_inline_diff(buf, nil, nil) end, 'Expand inline diff for file')
-  map('n', '<', u.inline_diff.del, 'Collapse inline diff for file')
+  map('n', '<', del_inline_diff, 'Collapse inline diff for file')
   map('n', '=', function()
     if not del_inline_diff() then
-      show_inline_diff()
+      show_inline_diff(buf, nil, nil)
     end
   end, 'Toggle inline diff for file')
 
@@ -138,22 +143,28 @@ local function setup_keymaps(buf)
 
   -- Undo checkout
   map('n', 'X', function()
-    local path = get_file_from_line()
+
+    local cursor = vim.api.nvim_win_get_cursor(0)
+    local row = cursor[1]
+    local path = get_file_from_line(cursor[1])
     if not path then
       vim.notify('No file under cursor', vim.log.levels.WARN)
       return
     end
 
-    if vim.fn.confirm('Undo checkout of ' .. vim.fn.fnamemodify(path, ':t') .. '?') == 1 then
-      local cmd = { 'undo', path, '/noprompt' }
-      u.tf_cmd(cmd, { print_stdout = true }, function(obj)
-        if obj.code == 0 then
-          vim.schedule(function()
-            vim.cmd('e!') -- Refresh
-          end)
-        end
-      end)
-    end
+    local cmd = { 'undo', path, '/noprompt' }
+    u.tf_cmd(cmd, { print_stdout = true }, vim.schedule_wrap(function(obj)
+      if obj.code == 0 then
+          local mark = u.get_mark_under_cursor(cursor)
+          if mark then
+            u.inline_diff.del(buf, mark)
+          end
+
+          vim.api.nvim_set_option_value('modifiable', true, { buf = buf })
+          vim.api.nvim_buf_set_lines(buf, row - 1, row, true, {})
+          vim.api.nvim_set_option_value('modifiable', false, { buf = buf })
+      end
+    end))
   end, 'Undo checkout of file')
 
 end
@@ -192,9 +203,20 @@ function M.review_bufreadcmd(args)
     -- vim.api.nvim_create_autocmd('BufEnter', {
     --   buf = buf,
     --   callback = vim.schedule_wrap(function(args)
-    --     local marks = vim.api.nvim_buf_get_extmarks(0, u.ns, 0, -1, { details = true })
-    --     for _, value in pairs(marks) do
-    --       show_inline_diff(buf,  value[2] + 1, true)
+    --     local start = 0
+    --     local refreshed_marks = { }
+    --     while true do
+    --       local marks = vim.api.nvim_buf_get_extmarks(buf, u.ns, start, -1, { details = true })
+    --       if #marks == 0 then
+    --         return
+    --       end
+    --       local mark = marks[1]
+    --       if not refreshed_marks[mark[1]] then
+    --         show_inline_diff(buf,  mark[2] + 1, true)
+    --       end
+    --       refreshed_marks[mark[1]] = true
+    --       local end_row = mark[4].end_row
+    --       start = assert(end_row)
     --     end
     --   end)
     -- })

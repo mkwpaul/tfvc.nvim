@@ -23,7 +23,7 @@ local function get_path_from_cmd_args(args, verb, cwd_fallback)
 end
 
 ---@class tfvc.cmd_from_verb_args
----@field verb string
+---@field verb string|string[]
 ---@field print_stdout? boolean
 ---@field callback? function
 
@@ -34,11 +34,20 @@ local function cmd_from_verb(cmd_opts)
 
   ---@param _args vim.api.keyset.create_user_command.command_args
   return function(_args)
-    local path = get_path_from_cmd_args(_args, cmd_opts.verb)
+    local path = get_path_from_cmd_args(_args, cmd_opts.verb[1])
     if not path then
       return
     end
-    local args = { 'vc' , cmd_opts.verb, path }
+    local args = {}
+    if type(cmd_opts.verb) == 'string' then
+      args = { 'vc' , cmd_opts.verb, path }
+    elseif type(cmd_opts.verb) == 'table' then
+      args = { 'vc' , unpack(cmd_opts.verb) }
+      table.insert(args, path)
+    else
+      error('verb has to be string or string[]')
+    end
+
     local job = require('tfvc.utils').tf_cmd(args, { print_stdout = cmd_opts.print_stdout }, cmd_opts.callback)
     local vars = require 'tfvc.options'
     if vars.blocking then
@@ -251,6 +260,16 @@ M.commands = {
       end
       vim.cmd(v.status_open_cmd .. ' tfvc:///changeset/'.. cs)
     end
+  },
+  get = {
+    desc = 'Get latest file',
+    complete = true,
+    run = cmd_from_verb {
+      verb = { 'get', '/recursive', },
+      callback = vim.schedule_wrap(function ()
+        require('tfvc.utils').invalidate_latest()
+      end)
+    }
   },
 }
 
