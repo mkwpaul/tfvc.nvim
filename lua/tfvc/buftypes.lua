@@ -110,7 +110,6 @@ function M.history_bufreadcmd(args)
   -- end
   table.insert(cmd, '/recursive')
 
-
   ---@type string|nil
   local continue_at = nil
 
@@ -338,6 +337,7 @@ function M.files_bufreadcmd(args)
 
   local u = require 'tfvc.utils'
   local fresh = vim.v.cmdbang == 1
+
   u.tf_get_version_from_versionspec(path, versionspec, fresh, function (file_path)
     vim.api.nvim_buf_call(buf, function()
 

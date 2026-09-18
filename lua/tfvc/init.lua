@@ -265,6 +265,7 @@ M.commands = {
     desc = 'Get latest file',
     complete = true,
     run = cmd_from_verb {
+      print_stdout = true,
       verb = { 'get', '/recursive', },
       callback = vim.schedule_wrap(function ()
         require('tfvc.utils').invalidate_latest()
