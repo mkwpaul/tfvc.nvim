@@ -50,7 +50,8 @@ local function render_review_buffer(buf, pending_changes)
     if cwd and display_path:sub(1, #cwd) == cwd then
       display_path = display_path:sub(#cwd + 2) -- +2 to skip the path separator
     end
-    local icon = u.change_type_to_abbr(change.Change)
+    local icon = u.change_type_to_abbr(change.Change, '')
+    if icon == '' then icon = 'E' end
     buffer_content[#buffer_content+1] = icon .. ' ' .. display_path
   end
 
@@ -70,7 +71,9 @@ local function get_file_from_line(row)
   if line:match("^%+") or line:match("^%-") or line:match("^#") then
       return nil
   end
-  return line:sub(3)
+  local idx = line:find(' ', 1, true)
+  if idx < 1 then return nil end
+  return line:sub(idx+1)
 end
 
 local function show_inline_diff(buf, row, replace)

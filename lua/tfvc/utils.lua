@@ -1,6 +1,8 @@
 ---@module 'tfvc.types'
 local M = {}
 
+local v = require('tfvc.options')
+
 M.ns = vim.api.nvim_create_namespace('tfvc')
 
 ---@type tfvc.file_version[]
@@ -88,7 +90,6 @@ function M.tf_cmd(command, opts, callback)
     end
   end
 
-  local v = require 'tfvc.options'
   table.insert(command, 1, v.executable_path)
   local command_string = table.concat(command, ' ')
   if not opts.suppress_echo then
@@ -107,8 +108,7 @@ function M.tf_cmd(command, opts, callback)
       end
     end)
 
-    local o = require('tfvc.options')
-    if o.debug then
+    if v.debug then
       local log = 'Job finished: ' .. command_string .. '\n' .. 'Code:  ' .. obj.code .. '\n' .. obj.stderr .. obj.stdout
       vim.schedule(function()
         vim.notify(log, nil, nil)
@@ -315,11 +315,9 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
   local cache = M.file_versions
 
   if (versionspec == 'L') then
-    --local l = (path, true)
     callback(path)
     return
   end
-
 
   if not force_fresh then
     for _, value in pairs(cache) do
@@ -338,32 +336,43 @@ function M.tf_get_version_from_versionspec(path, versionspec, force_fresh, callb
   end
 
   temp = temp or vim.fn.tempname()
-  local cmd_opts = { suppress_echo = true, }
+  ---@type tfvc.tf_cmd_opts
+  local cmd_opts = {
+    suppress_echo = true,
+    print_stdout = false,
+    return_stderr_on_failure = true
+  }
 
-  local cmd = { 'vc', 'view', '/version:' .. versionspec, path, '/output:' .. temp }
-  M.tf_cmd(cmd, cmd_opts , vim.schedule_wrap(function(obj)
-    if obj.code == 0 then
-      if obj.stdout then
-        print(obj.stdout)
-      end
-      ---@type tfvc.file_version
-      local cache_entry = {
-        versionspec = versionspec,
-        local_file = path,
-        server_file = temp
-      }
-
-      -- remove existing cache entry if any
-      for i, value in ipairs(cache) do
-        if value.versionspec == versionspec and path == value.local_file then
-          table.remove(cache, i)
-          break
+  if v.is_tee then
+    error('TODO: get server files for TEE')
+  else
+    local cmd = { 'vc', 'view', '/version:' .. versionspec, path, '/output:' .. temp }
+    M.tf_cmd(cmd, cmd_opts , vim.schedule_wrap(function(obj)
+      if obj.code == 0 then
+        if obj.stdout then
+          print(obj.stdout)
         end
+        ---@type tfvc.file_version
+        local cache_entry = {
+          versionspec = versionspec,
+          local_file = path,
+          server_file = temp
+        }
+
+        -- remove existing cache entry if any
+        for i, value in ipairs(cache) do
+          if value.versionspec == versionspec and path == value.local_file then
+            table.remove(cache, i)
+            break
+          end
+        end
+        table.insert(cache, cache_entry)
+        callback(temp)
+      else
+        callback('/dev/null')
       end
-      table.insert(cache, cache_entry)
-      callback(temp)
-    end
-  end))
+    end))
+  end
 end
 
 --[[
@@ -412,7 +421,6 @@ end
 
 ---@return tfvc.workfold
 function M.get_active_workfold()
-  local options = require 'tfvc.options'
 
   local function try_get_from_cwd()
     local cwd = assert(vim.uv.cwd())
@@ -434,7 +442,7 @@ function M.get_active_workfold()
     end
 
     return
-      vim.iter(options.workfolds):find(find_wf) or
+      vim.iter(v.workfolds):find(find_wf) or
       vim.iter(M.workfolds):find(find_wf)
   end
 
@@ -495,7 +503,6 @@ function M.local_path_to_server_path(path)
 end
 
 function M.cmd_open_web_history()
-  local v = require 'tfvc.options'
   local workfold = M.get_active_workfold()
   assert(workfold, 'Workfold must be initialized. Try Again.')
   assert(v.version_control_web_url, [[User-Option 'version_control_web_url' must be set for command 'open web history']])
@@ -531,36 +538,20 @@ function M.close_tfvc_diff_wins()
   end
 end
 
-function M.diff_files_inline(left, right)
-  local _, inline_diff = pcall(require, 'inline_diff')
-  if not inline_diff then
-    vim.print("'inline_diff' could not be loaded", vim.log.levels.WARN)
-    M.diff_files(left, right)
-    return
-  end
-
-  local buf = vim.uri_to_bufnr(vim.uri_from_fname(right))
-  if inline_diff.has_active_inline_diff(buf) then
-    inline_diff.stop_inline(buf)
-  else
-    inline_diff.setup_inline_diff(buf, left)
-  end
-end
-
 function M.diff_files(left, right)
-  local u = require 'tfvc.utils'
-  local vars = require 'tfvc.options'
 
   -- close wins that we previously opened
   -- otherwise new splits will acculumate when going throuhg multiple files
   -- which the user would have to close manually
-  u.close_tfvc_diff_wins()
+  M.close_tfvc_diff_wins()
   vim.cmd.diffoff({ bang = true })
-  vim.cmd ('keepjumps ' .. vars.diff_open_cmd ..  ' ' .. right)
+  local value = v.diff_open_cmd
+  print(value)
+  vim.cmd ('keepjumps ' .. v.diff_open_cmd ..  ' ' .. right)
   vim.cmd ('keepjumps diffsplit ' .. left)
 
-  if vars.diff_no_split then vim.cmd ':norm q' end
-  if vars.diff_open_folds then vim.cmd ':norm zr' end
+  if v.diff_no_split then vim.cmd ':norm q' end
+  if v.diff_open_folds then vim.cmd ':norm zr' end
   -- note that diff_open_folds has additional logic
   -- where the cursor is moved to the first change
   -- this is handeld in the tfvc:///files callback
@@ -574,14 +565,13 @@ function M.tf_compare(opts)
     return
   end
 
-  local versionspec = opts.versionspec or require('tfvc.options').default_versionspec
+  local versionspec = opts.versionspec or v.default_versionspec
   M.close_tfvc_diff_wins()
   vim.cmd(':diffo!')
   vim.cmd.diffsplit('tfvc:///files/'..versionspec..'/'..path)
 
-  local o = require 'tfvc.options'
-  if opts.diff_no_split == nil then opts.diff_no_split = o.diff_no_split  end
-  if opts.diff_open_folds == nil then opts.diff_open_folds = o.diff_open_folds end
+  if opts.diff_no_split == nil then opts.diff_no_split = v.diff_no_split  end
+  if opts.diff_open_folds == nil then opts.diff_open_folds = v.diff_open_folds end
   if opts.diff_no_split then vim.cmd ':norm q' end
   if opts.diff_open_folds then vim.cmd ':norm zr' end
 end
@@ -589,7 +579,6 @@ end
 function M.toggle_diff()
   local was_diff =  vim.api.nvim_get_option_value('diff', { win = 0 })
   if vim.b[0].is_server_file then
-    local v = require('tfvc.options')
     if vim.b[0].versionspec == v.default_versionspec then
       vim.api.nvim_win_close(0, true)
       return
@@ -606,15 +595,14 @@ end
 ---@param files string[] list of file paths
 ---@param versionspec tfvc.versionspec?
 function M.preload_versions_for_files(files, versionspec, force_fresh)
-  versionspec = versionspec or require('tfvc.options').default_versionspec
+  versionspec = versionspec or v.default_versionspec
   for _, file in pairs(files) do
     M.tf_get_version_from_versionspec(file, versionspec, force_fresh, function () end)
   end
 end
 
 function M.get_changeset_web_url(changeset)
-  local vars = require('tfvc.options')
-  local header = vars.version_control_web_url .. '/changeset/'.. changeset
+  local header = v.version_control_web_url .. '/changeset/'.. changeset
   return header
 end
 
@@ -623,20 +611,33 @@ end
 ---@param node xmlNode
 ---@param changes table<tfvc.pending_change>
 local function iter_xml(node, changes)
-  if node.tag == 'PendingChange' then
+
+  local key_pendingChange = 'PendingChange'
+  local key_local = 'local'
+  local key_serverpath = 'item'
+  local key_type = 'chg'
+
+  if v.is_tee then
+    key_pendingChange = 'pending-change'
+    key_local = 'local-item'
+    key_serverpath = 'server-item'
+    key_type = 'change-type'
+  end
+
+  if node.tag == key_pendingChange then
     ---@type tfvc.xmlPendingChange
     local props = node.attrs
 
-    local l = vim.fs.normalize(props["local"]);
+    local l = vim.fs.normalize(props[key_local]);
 
     ---@type tfvc.pending_change
     local pendingChange = {
-      Change = props.chg or '',
+      Change = props[key_type] or '',
       Local = l,
       Relative = vim.fs.relpath('.', l, {}) or l,
-      item = props.item,
-      type = props["type"],
-      name = vim.fs.basename(props["local"])
+      item = props[key_serverpath],
+      type = props['type'] or 'File',
+      name = vim.fs.basename(props[key_local])
     }
     table.insert(changes, pendingChange)
   end
@@ -690,32 +691,34 @@ function M.get_pending_changes_co(force_fresh)
   end)
 end
 
-function M.change_type_to_icons(change)
+function M.change_type_to_icons(change, join_char)
   local words = vim.split(change or '', ' ', { plain = true, trimempty = true })
   local result = {}
   -- TODO: check if icons are availible / check an option
   for _, value in pairs(words) do
-    if value == 'Add' then table.insert(result, '+') end
-    if value == 'Edit' then table.insert(result, '✎') end
-    if value == 'Delete' then table.insert(result, '🗑') end
-    if value == 'Encoding' then table.insert(result, '🗎') end
-    if value == 'Rollback' then table.insert(result, '←') end
+    value = value:lower()
+    if value == 'add' then table.insert(result, '+') end
+    if value == 'edit' then table.insert(result, '✎') end
+    if value == 'delete' then table.insert(result, '🗑') end
+    if value == 'encoding' then table.insert(result, '🗎') end
+    if value == 'rollback' then table.insert(result, '←') end
   end
-  return table.concat(result, ' ')
+  return table.concat(result, join_char or ' ')
 end
 
-function M.change_type_to_abbr(change)
+function M.change_type_to_abbr(change, join_char)
   local words = vim.split(change or '', ' ', { plain = true, trimempty = true })
   local result = {}
   -- TODO: check if icons are availible / check an option
   for _, value in pairs(words) do
-    if value == 'Add' then table.insert(result, 'A') end
-    if value == 'Edit' then table.insert(result, 'E') end
-    if value == 'Delete' then table.insert(result, 'D') end
-    if value == 'Encoding' then table.insert(result, 'C') end
-    if value == 'Rollback' then table.insert(result, 'R') end
+    value = value:lower()
+    if value == 'add' then table.insert(result, 'A') end
+    if value == 'edit' then table.insert(result, 'E') end
+    if value == 'delete' then table.insert(result, 'D') end
+    if value == 'encoding' then table.insert(result, 'C') end
+    if value == 'rollback' then table.insert(result, 'R') end
   end
-  return table.concat(result, ' ')
+  return table.concat(result, join_char or ' ')
 end
 
 ---@param pending_changes tfvc.pending_change[] 

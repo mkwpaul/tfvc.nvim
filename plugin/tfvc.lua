@@ -36,6 +36,12 @@ vim.api.nvim_create_autocmd('BufReadCmd', {
 
 vim.api.nvim_create_autocmd('BufReadCmd', {
   group = augroup_tfvc,
+  pattern = 'tfvc:///dir/*',
+  callback = function (args) require('tfvc.buftypes').dir_bufreadcmd(args) end
+})
+
+vim.api.nvim_create_autocmd('BufReadCmd', {
+  group = augroup_tfvc,
   pattern = 'tfvc:///status',
   callback = function (args) require('tfvc.review').review_bufreadcmd(args) end
 })

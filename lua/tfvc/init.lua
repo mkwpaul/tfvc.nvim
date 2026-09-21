@@ -40,9 +40,9 @@ local function cmd_from_verb(cmd_opts)
     end
     local args = {}
     if type(cmd_opts.verb) == 'string' then
-      args = { 'vc' , cmd_opts.verb, path }
+      args = { cmd_opts.verb, path }
     elseif type(cmd_opts.verb) == 'table' then
-      args = { 'vc' , unpack(cmd_opts.verb) }
+      args = { unpack(cmd_opts.verb) }
       table.insert(args, path)
     else
       error('verb has to be string or string[]')
@@ -273,21 +273,6 @@ M.commands = {
     }
   },
 }
-
-local _, inline_diff = pcall(require, 'inline_diff')
-if inline_diff then
-
-  M.commands.inline_diff = {
-    desc = 'Experimental: Compare local file to latest server version, (depends on diff executable in PATH)',
-    run = function (args)
-      local path = get_path_from_cmd_args(args, 'inline_diff')
-      local u = require('tfvc.utils')
-      u.tf_get_version_from_versionspec(path, 'T', false, vim.schedule_wrap(function(server_file)
-        u.diff_files_inline(server_file, path)
-      end))
-    end
-  }
-end
 
 local cmd_name = 'TF'
 function M.cmd_TF_complete(arg_lead, cmdline, cursor_pos)

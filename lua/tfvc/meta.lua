@@ -30,6 +30,9 @@ error('Cannot require a meta file')
 ---
 ---@field status_open_cmd string
 ---
+---command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
+---@field diff_open_cmd string
+---
 ---if specified, use iconv to convert output from tf.exe from the specified encoding to utf-8, value is passed as-is to iconv, so it should be an encoding
 ---@field output_encoding string
 ---
@@ -40,10 +43,25 @@ error('Cannot require a meta file')
 ---@field blocking boolean
 ---
 ---command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
----@field diff_open_cmd string
----
----command to use when opening diff views from history or changeset buffers, should be one of 'edit', 'split', 'vsplit', 'above split', 'top' etc. see :h window
 ---@field workfolds tfvc.workfold[]
+---
+---flag to specify if the tf executable is the cross-platform 'team explorer everywhere' (tee) utility
+---and not the tf.exe included with visual studio
+---@field is_tee boolean
+---
+---
+--- Value must be a command that takes an uri to open a buffer
+---  i.e one of 
+---  - edit
+---  - split
+---  - newtab
+---  - above split
+---  or other combinations
+---
+---  either one value to use for all commands
+---  or a table with subcommands as keys and the corresponding value to use for that subcommand
+---
+---@field open_cmd string|table<string,string>
 
 ---@alias tfvc.versionspec string see :h tfvc-versionspec
 
@@ -116,6 +134,7 @@ error('Cannot require a meta file')
 ---@class tfvc.subcommand
 ---@field desc string
 ---@field complete nil|boolean|function
+---@field force_skip_iconv nil|boolean
 ---@field run fun(opts: vim.api.keyset.create_user_command.command_args)
 
 ---@class tfvc.tf_cmd_opts

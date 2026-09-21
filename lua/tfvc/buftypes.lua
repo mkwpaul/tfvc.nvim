@@ -128,7 +128,9 @@ function M.history_bufreadcmd(args)
   }
 
   local function render_page(obj, remove_header)
-    local lines = vim.split(obj.stdout or obj.stderr, '\r\n')
+    local text = obj.stdout or obj.stderr
+    text = text:gsub('\r\n', '\n')
+    local lines = vim.split(text, '\n')
     table.remove(lines, #lines) -- removes last blank line
     if remove_header then
       table.remove(lines, 1) -- removes column headers
@@ -399,6 +401,24 @@ function M.files_bufreadcmd(args)
       end
     end)
   end)
+end
+
+function M.dir_bufreadcmd(args)
+  local buf = args.buf
+  local path = args.file:gsub('tfvc:///dir/', '')
+  local u = require 'tfvc.utils'
+  local bufOpt = { buf = buf}
+  local cmd = { 'dir',  path,  '/noprompt' }
+
+  u.tf_cmd(cmd, { }, vim.schedule_wrap(function(obj)
+
+    local text = obj.stdout or obj.stderr
+    text = text:gsub('\r\n', '\n')
+    local lines = vim.split(text, '\n')
+    vim.api.nvim_set_option_value('modifiable', true, bufOpt)
+    vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+    vim.api.nvim_set_option_value('modifiable', false, bufOpt)
+  end))
 end
 
 return M
